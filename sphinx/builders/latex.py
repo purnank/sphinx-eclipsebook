@@ -160,14 +160,21 @@ class LaTeXBuilder(Builder):
                          path.join(self.outdir, dest))
             self.info()
 
-        # copy TeX support files from texinputs
-        self.info(bold('copying TeX support files...'))
+        # the logo is handled differently
+        if self.config.latex_logo:
+            logobase = path.basename(self.config.latex_logo)
+            copyfile(path.join(self.confdir, self.config.latex_logo),
+                     path.join(self.outdir, logobase))
+
+        self.info(bold('copying TeX support files... '), nonl=True)
         staticdirname = path.join(package_dir, 'texinputs')
         for filename in os.listdir(staticdirname):
             if not filename.startswith('.'):
                 copyfile(path.join(staticdirname, filename),
                          path.join(self.outdir, filename))
 
+        # Copy our files after Sphinx. This will help us cleanly
+        # override any modifications from sphinx.
         # copy additional files
         if self.config.latex_additional_files:
             self.info(bold('copying additional files...'), nonl=1)
@@ -177,9 +184,4 @@ class LaTeXBuilder(Builder):
                          path.join(self.outdir, path.basename(filename)))
             self.info()
 
-        # the logo is handled differently
-        if self.config.latex_logo:
-            logobase = path.basename(self.config.latex_logo)
-            copyfile(path.join(self.confdir, self.config.latex_logo),
-                     path.join(self.outdir, logobase))
         self.info('done')
