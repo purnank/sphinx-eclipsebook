@@ -538,7 +538,13 @@ class LaTeXTranslator(nodes.NodeVisitor):
             except IndexError:
                 # just use "subparagraph", it's not numbered anyway
                 self.body.append(r'\%s{' % self.sectionnames[-1])
-            self.context.append('}\n')
+#M+
+            if self.builder.config.latex_use_minitoc and self.sectionlevel == 1:
+                # Add minitoc to every chapter entry.
+                self.context.append('}\n\\minitoc\n')
+            else:
+#M-
+                self.context.append('}\n')
 
             if self.next_section_ids:
                 for id in self.next_section_ids:

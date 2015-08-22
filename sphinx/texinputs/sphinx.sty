@@ -12,7 +12,7 @@
 
 \RequirePackage{textcomp}
 \RequirePackage{fancybox}
-\RequirePackage{titlesec}
+\@ifclassloaded{minitoc}{}{\RequirePackage{titlesec}}
 \RequirePackage{tabulary}
 \RequirePackage{amsmath} % for \text
 \RequirePackage{makeidx}
