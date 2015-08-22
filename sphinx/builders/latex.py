@@ -45,7 +45,7 @@ class LaTeXBuilder(Builder):
         texescape.init()
 
     def get_outdated_docs(self):
-        return 'all documents' # for now
+        return 'all documents'  # for now
 
     def get_target_uri(self, docname, typ=None):
         if docname not in self.docnames:
@@ -94,18 +94,29 @@ class LaTeXBuilder(Builder):
                 destination_path=path.join(self.outdir, targetname),
                 encoding='utf-8')
             self.info("processing " + targetname + "... ", nonl=1)
-            doctree = self.assemble_doctree(docname, toctree_only,
-                appendices=((docclass != 'howto') and
-                            self.config.latex_appendices or []))
+            doctree = self.assemble_doctree(
+                docname, toctree_only,
+                appendices=((docclass != 'howto') and self.config.latex_appendices or []))
             self.post_process_images(doctree)
             self.info("writing... ", nonl=1)
             doctree.settings = docsettings
             doctree.settings.author = author
             doctree.settings.title = title
+            doctree.settings.contentsname = self.get_contentsname(docname)
             doctree.settings.docname = docname
             doctree.settings.docclass = docclass
             docwriter.write(doctree, destination)
             self.info("done")
+
+    def get_contentsname(self, indexfile):
+        tree = self.env.get_doctree(indexfile)
+        contentsname = None
+        for toctree in tree.traverse(addnodes.toctree):
+            if toctree['caption']:
+                contentsname = toctree['caption']
+                break
+
+        return contentsname
 
     def assemble_doctree(self, indexfile, toctree_only, appendices):
         self.docnames = set([indexfile] + appendices)
@@ -124,7 +135,7 @@ class LaTeXBuilder(Builder):
                 new_sect += node
             tree = new_tree
         largetree = inline_all_toctrees(self, self.docnames, indexfile, tree,
-                                        darkgreen)
+                                        darkgreen, [indexfile])
         largetree['docname'] = indexfile
         for docname in appendices:
             appendix = self.env.get_doctree(docname)

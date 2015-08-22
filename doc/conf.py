@@ -38,10 +38,11 @@ epub_scheme = 'url'
 epub_identifier = epub_publisher
 epub_pre_files = [('index.html', 'Welcome')]
 epub_post_files = [('install.html', 'Installing Sphinx'),
-    ('develop.html', 'Sphinx development')]
+                   ('develop.html', 'Sphinx development')]
 epub_exclude_files = ['_static/opensearch.xml', '_static/doctools.js',
-    '_static/jquery.js', '_static/searchtools.js', '_static/underscore.js',
-    '_static/basic.css', 'search.html', '_static/websupport.js']
+                      '_static/jquery.js', '_static/searchtools.js',
+                      '_static/underscore.js', '_static/basic.css',
+                      'search.html', '_static/websupport.js']
 epub_fix_images = False
 epub_max_image_width = 0
 epub_show_urls = 'inline'
@@ -84,7 +85,7 @@ texinfo_documents = [
 
 # We're not using intersphinx right now, but if we did, this would be part of
 # the mapping:
-intersphinx_mapping = {'python': ('http://docs.python.org/2/', None)}
+intersphinx_mapping = {'python': ('https://docs.python.org/2/', None)}
 
 # Sphinx document translation with sphinx gettext feature uses these settings:
 locale_dirs = ['locale/']
@@ -93,10 +94,10 @@ gettext_compact = False
 
 # -- Extension interface -------------------------------------------------------
 
-from sphinx import addnodes
-
+from sphinx import addnodes  # noqa
 
 event_sig_re = re.compile(r'([a-zA-Z-]+)\s*\((.*)\)')
+
 
 def parse_event(env, sig, signode):
     m = event_sig_re.match(sig)

@@ -155,8 +155,8 @@ def collect_pages(app):
             backlink = urito(pagename, docname) + '#' + refname + '.' + name
             lines[start] = (
                 '<div class="viewcode-block" id="%s"><a class="viewcode-back" '
-                'href="%s">%s</a>' % (name, backlink, _('[docs]'))
-                + lines[start])
+                'href="%s">%s</a>' % (name, backlink, _('[docs]')) +
+                lines[start])
             lines[min(end - 1, maxindex)] += '</div>'
         # try to find parents (for submodules)
         parents = []
@@ -217,4 +217,4 @@ def setup(app):
     app.connect('missing-reference', missing_reference)
     # app.add_config_value('viewcode_include_modules', [], 'env')
     # app.add_config_value('viewcode_exclude_modules', [], 'env')
-    return {'version': sphinx.__version__, 'parallel_read_safe': True}
+    return {'version': sphinx.__display_version__, 'parallel_read_safe': True}

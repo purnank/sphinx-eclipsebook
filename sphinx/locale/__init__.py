@@ -138,16 +138,18 @@ class _TranslationProxy(UserString, object):
         except:
             return '<%s broken>' % self.__class__.__name__
 
+
 def mygettext(string):
     """Used instead of _ when creating TranslationProxies, because _ is
     not bound yet at that time.
     """
     return _(string)
 
+
 def lazy_gettext(string):
     """A lazy version of `gettext`."""
-    #if isinstance(string, _TranslationProxy):
-    #    return string
+    # if isinstance(string, _TranslationProxy):
+    #     return string
     return _TranslationProxy(mygettext, string)
 
 l_ = lazy_gettext
@@ -193,7 +195,7 @@ else:
         return translators['sphinx'].ugettext(message)
 
 
-def init(locale_dirs, language, catalog='sphinx'):
+def init(locale_dirs, language, catalog='sphinx', charset='utf-8'):
     """Look for message catalogs in `locale_dirs` and *ensure* that there is at
     least a NullTranslations catalog set in `translators`.  If called multiple
     times or if several ``.mo`` files are found, their contents are merged
@@ -206,10 +208,19 @@ def init(locale_dirs, language, catalog='sphinx'):
         translator = None
     # the None entry is the system's default locale path
     has_translation = True
+
+    # compile mo files if po file is updated
+    # TODO: remove circular importing
+    from sphinx.util.i18n import find_catalog_source_files
+    for catinfo in find_catalog_source_files(locale_dirs, language, domains=[catalog],
+                                             charset=charset):
+        catinfo.write_mo(language)
+
+    # loading
     for dir_ in locale_dirs:
         try:
             trans = gettext.translation(catalog, localedir=dir_,
-                    languages=[language])
+                                        languages=[language])
             if translator is None:
                 translator = trans
             else:

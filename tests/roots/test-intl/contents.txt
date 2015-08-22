@@ -14,10 +14,12 @@ CONTENTS
    literalblock
    seealso
    definition_terms
-   figure_caption
+   figure
    index_entries
    role_xref
    glossary_terms
    glossary_terms_inconsistency
    versionchange
    docfields
+   raw
+   refs

@@ -35,12 +35,12 @@ from pygments.util import ClassNotFound
 from sphinx.pygments_styles import SphinxStyle, NoneStyle
 
 lexers = dict(
-    none = TextLexer(),
-    python = PythonLexer(),
-    pycon = PythonConsoleLexer(),
-    pycon3 = PythonConsoleLexer(python3=True),
-    rest = RstLexer(),
-    c = CLexer(),
+    none = TextLexer(stripnl=False),
+    python = PythonLexer(stripnl=False),
+    pycon = PythonConsoleLexer(stripnl=False),
+    pycon3 = PythonConsoleLexer(python3=True, stripnl=False),
+    rest = RstLexer(stripnl=False),
+    c = CLexer(stripnl=False),
 )
 for _lexer in lexers.values():
     _lexer.add_filter('raiseonerror')
@@ -77,7 +77,7 @@ class PygmentsBridge(object):
         else:
             style = get_style_by_name(stylename)
         self.trim_doctest_flags = trim_doctest_flags
-        self.formatter_args = {'style' : style}
+        self.formatter_args = {'style': style}
         if dest == 'html':
             self.formatter = self.html_formatter
         else:
@@ -114,7 +114,7 @@ class PygmentsBridge(object):
         src = src.replace("...", mark)
 
         # lines beginning with "..." are probably placeholders for suite
-        src = re.sub(r"(?m)^(\s*)" + mark + "(.)", r"\1"+ mark + r"# \2", src)
+        src = re.sub(r"(?m)^(\s*)" + mark + "(.)", r"\1" + mark + r"# \2", src)
 
         if PY2 and isinstance(src, text_type):
             # Non-ASCII chars will only occur in string literals

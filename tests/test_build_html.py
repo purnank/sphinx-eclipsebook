@@ -15,7 +15,7 @@ import re
 from six import PY3, iteritems
 from six.moves import html_entities
 
-from sphinx import __version__
+from sphinx import __display_version__
 from util import remove_unicode_literals, gen_with_app
 from etree13 import ElementTree as ET
 
@@ -31,7 +31,7 @@ http://www.python.org/logo.png
 reading included file u'.*?wrongenc.inc' seems to be wrong, try giving an \
 :encoding: option\\n?
 %(root)s/includes.txt:4: WARNING: download file not readable: .*?nonexisting.png
-(%(root)s/markup.txt:\\d+: WARNING: Malformed :option: u'Python c option', does \
+(%(root)s/markup.txt:\\d+: WARNING: Malformed :option: u'&option', does \
 not contain option marker - or -- or / or \\+
 %(root)s/undecodable.txt:3: WARNING: undecodable source characters, replacing \
 with "\\?": b?'here: >>>(\\\\|/)xbb<<<'
@@ -134,7 +134,7 @@ HTML_XPATH = {
         (".//li/strong", r'^program\\n$'),
         (".//li/em", r'^dfn\\n$'),
         (".//li/code/span[@class='pre']", r'^kbd\\n$'),
-        (".//li/em", u'File \N{TRIANGULAR BULLET} Close'),
+        (".//li/span", u'File \N{TRIANGULAR BULLET} Close'),
         (".//li/code/span[@class='pre']", '^a/$'),
         (".//li/code/em/span[@class='pre']", '^varpart$'),
         (".//li/code/em/span[@class='pre']", '^i$'),
@@ -188,7 +188,7 @@ HTML_XPATH = {
         (".//p", 'In both.'),
         (".//p", 'Always present'),
         # tests for ``any`` role
-        (".//a[@href='#with']/em", 'headings'),
+        (".//a[@href='#with']/span", 'headings'),
         (".//a[@href='objects.html#func_without_body']/code/span", 'objects'),
     ],
     'objects.html': [
@@ -247,9 +247,9 @@ HTML_XPATH = {
         (".//div[@class='footer']", 'Georg Brandl & Team'),
         (".//a[@href='http://python.org/']"
             "[@class='reference external']", ''),
-        (".//li/a[@href='genindex.html']/em", 'Index'),
-        (".//li/a[@href='py-modindex.html']/em", 'Module Index'),
-        (".//li/a[@href='search.html']/em", 'Search Page'),
+        (".//li/a[@href='genindex.html']/span", 'Index'),
+        (".//li/a[@href='py-modindex.html']/span", 'Module Index'),
+        (".//li/a[@href='search.html']/span", 'Search Page'),
         # custom sidebar only for contents
         (".//h4", 'Contents sidebar'),
         # custom JavaScript
@@ -289,6 +289,9 @@ HTML_XPATH = {
         (".//a[@class='fn-backref'][@href='#id3']", r"\[3\]"),
         (".//a[@class='fn-backref'][@href='#id4']", r"\[bar\]"),
     ],
+    'otherext.html': [
+        (".//h1", "Generated section"),
+    ]
 }
 
 
@@ -344,7 +347,7 @@ def check_static_entries(outdir):
     assert (staticdir / 'subdir' / 'foo.css').isfile()
     # a file from a file entry in html_static_path
     assert (staticdir / 'templated.css').isfile()
-    assert (staticdir / 'templated.css').text().splitlines()[1] == __version__
+    assert (staticdir / 'templated.css').text().splitlines()[1] == __display_version__
     # a file from _static, but matches exclude_patterns
     assert not (staticdir / 'excluded.css').exists()
 
@@ -489,11 +492,11 @@ def test_numfig_disabled(app, status, warning):
             (".//div[@class='code-block-caption']/"
              "span[@class='caption-number']", None, True),
             (".//li/code/span", '^fig1$', True),
-            (".//li/code/span", '^Figure#$', True),
+            (".//li/code/span", '^Figure%s$', True),
             (".//li/code/span", '^table-1$', True),
-            (".//li/code/span", '^Table:#$', True),
-            (".//li/code/span", '^code_1$', True),
-            (".//li/code/span", '^Code-#$', True),
+            (".//li/code/span", '^Table:%s$', True),
+            (".//li/code/span", '^CODE_1$', True),
+            (".//li/code/span", '^Code-%s$', True),
         ],
         'foo.html': [
             (".//div[@class='figure']/p[@class='caption']/"
@@ -554,12 +557,12 @@ def test_numfig_without_numbered_toctree(app, status, warning):
              "span[@class='caption-number']", '^Listing 9 $', True),
             (".//div[@class='code-block-caption']/"
              "span[@class='caption-number']", '^Listing 10 $', True),
-            (".//li/a/em", '^Fig. 9$', True),
-            (".//li/a/em", '^Figure6$', True),
-            (".//li/a/em", '^Table 9$', True),
-            (".//li/a/em", '^Table:6$', True),
-            (".//li/a/em", '^Listing 9$', True),
-            (".//li/a/em", '^Code-6$', True),
+            (".//li/a/span", '^Fig. 9$', True),
+            (".//li/a/span", '^Figure6$', True),
+            (".//li/a/span", '^Table 9$', True),
+            (".//li/a/span", '^Table:6$', True),
+            (".//li/a/span", '^Listing 9$', True),
+            (".//li/a/span", '^Code-6$', True),
             ],
         'foo.html': [
             (".//div[@class='figure']/p[@class='caption']/"
@@ -649,12 +652,12 @@ def test_numfig_with_numbered_toctree(app, status, warning):
              "span[@class='caption-number']", '^Listing 1 $', True),
             (".//div[@class='code-block-caption']/"
              "span[@class='caption-number']", '^Listing 2 $', True),
-            (".//li/a/em", '^Fig. 1$', True),
-            (".//li/a/em", '^Figure2.2$', True),
-            (".//li/a/em", '^Table 1$', True),
-            (".//li/a/em", '^Table:2.2$', True),
-            (".//li/a/em", '^Listing 1$', True),
-            (".//li/a/em", '^Code-2.2$', True),
+            (".//li/a/span", '^Fig. 1$', True),
+            (".//li/a/span", '^Figure2.2$', True),
+            (".//li/a/span", '^Table 1$', True),
+            (".//li/a/span", '^Table:2.2$', True),
+            (".//li/a/span", '^Listing 1$', True),
+            (".//li/a/span", '^Code-2.2$', True),
             ],
         'foo.html': [
             (".//div[@class='figure']/p[@class='caption']/"
@@ -747,12 +750,12 @@ def test_numfig_with_prefix(app, status, warning):
              "span[@class='caption-number']", '^Code-1 $', True),
             (".//div[@class='code-block-caption']/"
              "span[@class='caption-number']", '^Code-2 $', True),
-            (".//li/a/em", '^Figure:1$', True),
-            (".//li/a/em", '^Figure2.2$', True),
-            (".//li/a/em", '^Tab_1$', True),
-            (".//li/a/em", '^Table:2.2$', True),
-            (".//li/a/em", '^Code-1$', True),
-            (".//li/a/em", '^Code-2.2$', True),
+            (".//li/a/span", '^Figure:1$', True),
+            (".//li/a/span", '^Figure2.2$', True),
+            (".//li/a/span", '^Tab_1$', True),
+            (".//li/a/span", '^Table:2.2$', True),
+            (".//li/a/span", '^Code-1$', True),
+            (".//li/a/span", '^Code-2.2$', True),
             ],
         'foo.html': [
             (".//div[@class='figure']/p[@class='caption']/"
@@ -842,12 +845,12 @@ def test_numfig_with_secnum_depth(app, status, warning):
              "span[@class='caption-number']", '^Listing 1 $', True),
             (".//div[@class='code-block-caption']/"
              "span[@class='caption-number']", '^Listing 2 $', True),
-            (".//li/a/em", '^Fig. 1$', True),
-            (".//li/a/em", '^Figure2.1.2$', True),
-            (".//li/a/em", '^Table 1$', True),
-            (".//li/a/em", '^Table:2.1.2$', True),
-            (".//li/a/em", '^Listing 1$', True),
-            (".//li/a/em", '^Code-2.1.2$', True),
+            (".//li/a/span", '^Fig. 1$', True),
+            (".//li/a/span", '^Figure2.1.2$', True),
+            (".//li/a/span", '^Table 1$', True),
+            (".//li/a/span", '^Table:2.1.2$', True),
+            (".//li/a/span", '^Listing 1$', True),
+            (".//li/a/span", '^Code-2.1.2$', True),
             ],
         'foo.html': [
             (".//div[@class='figure']/p[@class='caption']/"

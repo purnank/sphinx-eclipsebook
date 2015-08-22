@@ -10,6 +10,8 @@ Contents:
 .. toctree::
    :maxdepth: 2
    :numbered:
+   :caption: Table of Contents
+   :name: mastertoc
 
    extapi
    images
@@ -26,6 +28,7 @@ Contents:
    extensions
    footnote
    lists
+   otherext
 
    http://sphinx-doc.org/
    Latest reference <http://sphinx-doc.org/latest/>
@@ -53,3 +56,9 @@ This used to crash:
 
 .. toctree::
    :hidden:
+
+Test for issue #1700
+====================
+
+:ref:`mastertoc`
+

@@ -51,12 +51,23 @@ requires = [
     'Pygments>=2.0',
     'docutils>=0.11',
     'snowballstemmer>=1.1',
-    'babel',
+    'babel>=1.3',
+    'alabaster>=0.7,<0.8',
+    'sphinx_rtd_theme>=0.1,<0.2',
 ]
 extras_require = {
     # Environment Marker works for wheel 0.24 or later
     ':sys_platform=="win32"': [
         'colorama',
+    ],
+    'websupport': [
+        'sqlalchemy>=0.9',
+        'whoosh>=2.0',
+    ],
+    'test': [
+        'nose',
+        'mock',  # it would be better for 'test:python_version in "2.6,2.7"'
+        'simplejson',  # better: 'test:platform_python_implementation=="PyPy"'
     ],
 }
 
@@ -146,12 +157,12 @@ else:
 
                 outfile = open(js_file, 'wb')
                 try:
-                    outfile.write('Documentation.addTranslations(');
+                    outfile.write('Documentation.addTranslations(')
                     dump(dict(
                         messages=jscatalog,
                         plural_expr=catalog.plural_expr,
                         locale=str(catalog.locale)
-                        ), outfile)
+                    ), outfile)
                     outfile.write(');')
                 finally:
                     outfile.close()
@@ -163,7 +174,7 @@ setup(
     name='Sphinx',
     version=sphinx.__version__,
     url='http://sphinx-doc.org/',
-    download_url='http://pypi.python.org/pypi/Sphinx',
+    download_url='https://pypi.python.org/pypi/Sphinx',
     license='BSD',
     author='Georg Brandl',
     author_email='georg@python.org',

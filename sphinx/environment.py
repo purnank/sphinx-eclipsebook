@@ -23,7 +23,7 @@ from os import path
 from glob import glob
 from itertools import groupby
 
-from six import iteritems, itervalues, text_type, class_types
+from six import iteritems, itervalues, text_type, class_types, string_types
 from six.moves import cPickle as pickle, zip
 from docutils import nodes
 from docutils.io import FileInput, NullOutput
@@ -38,9 +38,10 @@ from docutils.frontend import OptionParser
 
 from sphinx import addnodes
 from sphinx.util import url_re, get_matching_docs, docname_join, split_into, \
-    FilenameUniqDict, get_figtype
-from sphinx.util.nodes import clean_astext, make_refnode, WarningStream
-from sphinx.util.osutil import SEP, find_catalog_files, getcwd, fs_encoding
+    FilenameUniqDict, get_figtype, import_object
+from sphinx.util.nodes import clean_astext, make_refnode, WarningStream, is_translatable
+from sphinx.util.osutil import SEP, getcwd, fs_encoding
+from sphinx.util.i18n import find_catalog_files
 from sphinx.util.console import bold, purple
 from sphinx.util.matching import compile_matchers
 from sphinx.util.parallel import ParallelTasks, parallel_available, make_chunks
@@ -50,7 +51,7 @@ from sphinx.locale import _
 from sphinx.versioning import add_uids, merge_doctrees
 from sphinx.transforms import DefaultSubstitutions, MoveModuleTargets, \
     HandleCodeBlocks, AutoNumbering, SortIds, CitationReferences, Locale, \
-    RemoveTranslatableInline, SphinxContentsFilter
+    RemoveTranslatableInline, SphinxContentsFilter, ExtraTranslatableNodes
 
 
 orig_role_function = roles.role
@@ -84,7 +85,7 @@ dummy_reporter = Reporter('', 4, 4)
 
 versioning_conditions = {
     'none': False,
-    'text': nodes.TextElement,
+    'text': is_translatable,
     'commentable': is_commentable,
 }
 
@@ -98,9 +99,32 @@ class SphinxStandaloneReader(standalone.Reader):
     """
     Add our own transforms.
     """
-    transforms = [Locale, CitationReferences, DefaultSubstitutions,
-                  MoveModuleTargets, HandleCodeBlocks, AutoNumbering, SortIds,
-                  RemoveTranslatableInline]
+    transforms = [ExtraTranslatableNodes, Locale, CitationReferences,
+                  DefaultSubstitutions, MoveModuleTargets, HandleCodeBlocks,
+                  AutoNumbering, SortIds, RemoveTranslatableInline]
+
+    def __init__(self, parsers={}, *args, **kwargs):
+        standalone.Reader.__init__(self, *args, **kwargs)
+        self.parser_map = {}
+        for suffix, parser_class in parsers.items():
+            if isinstance(parser_class, string_types):
+                parser_class = import_object(parser_class, 'source parser')
+            self.parser_map[suffix] = parser_class()
+
+    def read(self, source, parser, settings):
+        self.source = source
+
+        for suffix in self.parser_map:
+            if source.source_path.endswith(suffix):
+                self.parser = self.parser_map[suffix]
+                break
+
+        if not self.parser:
+            self.parser = parser
+        self.settings = settings
+        self.input = self.source.read()
+        self.parse()
+        return self.document
 
     def get_transforms(self):
         return standalone.Reader.get_transforms(self) + self.transforms
@@ -117,8 +141,6 @@ class SphinxFileInput(FileInput):
     def __init__(self, app, env, *args, **kwds):
         self.app = app
         self.env = env
-        # don't call sys.exit() on IOErrors
-        kwds['handle_io_errors'] = False
         kwds['error_handler'] = 'sphinx'  # py3: handle error on open.
         FileInput.__init__(self, *args, **kwds)
 
@@ -243,7 +265,7 @@ class BuildEnvironment:
         self.files_to_rebuild = {}  # docname -> set of files
                                     # (containing its TOCs) to rebuild too
         self.glob_toctrees = set()  # docnames that have :glob: toctrees
-        self.numbered_toctrees = set() # docnames that have :numbered: toctrees
+        self.numbered_toctrees = set()  # docnames that have :numbered: toctrees
 
         # domain-specific inventories, here to be pickled
         self.domaindata = {}        # domainname -> domain-specific dict
@@ -326,7 +348,7 @@ class BuildEnvironment:
                 fnset.discard(docname)
                 if not fnset:
                     del self.files_to_rebuild[subfn]
-            for key, (fn, _) in list(self.citations.items()):
+            for key, (fn, _ignore) in list(self.citations.items()):
                 if fn == docname:
                     del self.citations[key]
             for version, changes in self.versionchanges.items():
@@ -389,7 +411,15 @@ class BuildEnvironment:
         If *suffix* is not None, add it instead of config.source_suffix.
         """
         docname = docname.replace(SEP, path.sep)
-        suffix = suffix or self.config.source_suffix
+        if suffix is None:
+            for candidate_suffix in self.config.source_suffix:
+                if path.isfile(path.join(self.srcdir, docname) +
+                               candidate_suffix):
+                    suffix = candidate_suffix
+                    break
+            else:
+                # document does not exist
+                suffix = self.config.source_suffix[0]
         if base is True:
             return path.join(self.srcdir, docname) + suffix
         elif base is None:
@@ -429,7 +459,7 @@ class BuildEnvironment:
             config.exclude_patterns[:] +
             config.templates_path +
             config.html_extra_path +
-            ['**/_sources', '.#*']
+            ['**/_sources', '.#*', '*.lproj/**']
         )
         self.found_docs = set(get_matching_docs(
             self.srcdir, config.source_suffix, exclude_matchers=matchers))
@@ -744,7 +774,8 @@ class BuildEnvironment:
         codecs.register_error('sphinx', self.warn_and_replace)
 
         # publish manually
-        pub = Publisher(reader=SphinxStandaloneReader(),
+        reader = SphinxStandaloneReader(parsers=self.config.source_parsers)
+        pub = Publisher(reader=reader,
                         writer=SphinxDummyWriter(),
                         destination_class=NullOutput)
         pub.set_components(None, 'restructuredtext', None)
@@ -1284,7 +1315,7 @@ class BuildEnvironment:
                 else:
                     # cull sub-entries whose parents aren't 'current'
                     if (collapse and depth > 1 and
-                                'iscurrent' not in subnode.parent):
+                            'iscurrent' not in subnode.parent):
                         subnode.parent.remove(subnode)
                     else:
                         # recurse on visible children
@@ -1441,8 +1472,8 @@ class BuildEnvironment:
                                 toplevel[1][:] = subtrees
                     # resolve all sub-toctrees
                     for subtocnode in toc.traverse(addnodes.toctree):
-                        if not (subtocnode.get('hidden', False)
-                                and not includehidden):
+                        if not (subtocnode.get('hidden', False) and
+                                not includehidden):
                             i = subtocnode.parent.index(subtocnode) + 1
                             for item in _entries_from_toctree(
                                     subtocnode, [refdoc] + parents,
@@ -1473,7 +1504,11 @@ class BuildEnvironment:
         if not tocentries:
             return None
 
-        newnode = addnodes.compact_paragraph('', '', *tocentries)
+        newnode = addnodes.compact_paragraph('', '')
+        caption = toctree.attributes.get('caption')
+        if caption:
+            newnode += nodes.caption(caption, '', *[nodes.Text(caption)])
+        newnode.extend(tocentries)
         newnode['toctree'] = True
 
         # prune the tree to maxdepth, also set toc depth and current classes
@@ -1750,10 +1785,17 @@ class BuildEnvironment:
             counter[secnum] = counter.get(secnum, 0) + 1
             return secnum + (counter[secnum],)
 
-        def register_fignumber(docname, secnum, figtype, figure_id):
+        def register_fignumber(docname, secnum, figtype, fignode):
             self.toc_fignumbers.setdefault(docname, {})
             fignumbers = self.toc_fignumbers[docname].setdefault(figtype, {})
-            fignumbers[figure_id] = get_next_fignumber(figtype, secnum)
+            figure_id = fignode['ids'][0]
+
+            if (isinstance(fignode, nodes.image) and
+               isinstance(fignode.parent, nodes.figure) and
+               fignode.parent['ids']):
+                fignumbers[figure_id] = fignumbers[fignode.parent['ids'][0]]
+            else:
+                fignumbers[figure_id] = get_next_fignumber(figtype, secnum)
 
         def _walk_doctree(docname, doctree, secnum):
             for subnode in doctree.children:
@@ -1776,8 +1818,7 @@ class BuildEnvironment:
 
                 figtype = get_figtype(subnode)
                 if figtype and subnode['ids']:
-                    register_fignumber(docname, secnum,
-                                       figtype, subnode['ids'][0])
+                    register_fignumber(docname, secnum, figtype, subnode)
 
                 _walk_doctree(docname, subnode, secnum)
 
@@ -1903,8 +1944,8 @@ class BuildEnvironment:
             else:
                 # get all other symbols under one heading
                 return _('Symbols')
-        return [(key, list(group))
-                for (key, group) in groupby(newlist, keyfunc2)]
+        return [(key_, list(group))
+                for (key_, group) in groupby(newlist, keyfunc2)]
 
     def collect_relations(self):
         relations = {}

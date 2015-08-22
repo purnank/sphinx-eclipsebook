@@ -36,7 +36,8 @@ from sphinx.domains import ObjType, BUILTIN_DOMAINS
 from sphinx.domains.std import GenericObject, Target, StandardDomain
 from sphinx.builders import BUILTIN_BUILDERS
 from sphinx.environment import BuildEnvironment, SphinxStandaloneReader
-from sphinx.util import pycompat  # imported for side-effects
+from sphinx.util import pycompat  # noqa: imported for side-effects
+from sphinx.util import import_object
 from sphinx.util.tags import Tags
 from sphinx.util.osutil import ENOENT
 from sphinx.util.console import bold, lightgray, darkgray, darkgreen, \
@@ -78,6 +79,7 @@ class Sphinx(object):
         self._extension_metadata = {}
         self._listeners = {}
         self.domains = BUILTIN_DOMAINS.copy()
+        self.buildername = buildername
         self.builderclasses = BUILTIN_BUILDERS.copy()
         self.builder = None
         self.env = None
@@ -110,7 +112,7 @@ class Sphinx(object):
         self.messagelog = deque(maxlen=10)
 
         # say hello to the world
-        self.info(bold('Running Sphinx v%s' % sphinx.__version__))
+        self.info(bold('Running Sphinx v%s' % sphinx.__display_version__))
 
         # status code for command-line application
         self.statuscode = 0
@@ -130,6 +132,12 @@ class Sphinx(object):
         # of code expect a confdir to be set
         if self.confdir is None:
             self.confdir = self.srcdir
+
+        # extension loading support for alabaster theme
+        # self.config.html_theme is not set from conf.py at here
+        # for now, sphinx always load a 'alabaster' extension.
+        if 'alabaster' not in self.config.extensions:
+            self.config.extensions.append('alabaster')
 
         # load all user-given extension modules
         for extension in self.config.extensions:
@@ -151,7 +159,7 @@ class Sphinx(object):
 
         # check the Sphinx version if requested
         if self.config.needs_sphinx and \
-           self.config.needs_sphinx > sphinx.__version__[:3]:
+           self.config.needs_sphinx > sphinx.__display_version__[:3]:
             raise VersionRequirementError(
                 'This project needs at least Sphinx v%s and therefore cannot '
                 'be built with this version.' % self.config.needs_sphinx)
@@ -178,7 +186,7 @@ class Sphinx(object):
         # set up the build environment
         self._init_env(freshenv)
         # set up the builder
-        self._init_builder(buildername)
+        self._init_builder(self.buildername)
 
     def _init_i18n(self):
         """Load translated strings from the configured localedirs if enabled in
@@ -192,7 +200,8 @@ class Sphinx(object):
         else:
             locale_dirs = []
         self.translator, has_translation = locale.init(locale_dirs,
-                                                       self.config.language)
+                                                       self.config.language,
+                                                       charset=self.config.source_encoding)
         if self.config.language is not None:
             if has_translation or self.config.language == 'en':
                 # "en" never needs to be translated
@@ -256,8 +265,8 @@ class Sphinx(object):
                 self.builder.compile_update_catalogs()
                 self.builder.build_update()
 
-            status = (self.statuscode == 0
-                      and 'succeeded' or 'finished with problems')
+            status = (self.statuscode == 0 and
+                      'succeeded' or 'finished with problems')
             if self._warncount:
                 self.info(bold('build %s, %s warning%s.' %
                                (status, self._warncount,
@@ -439,34 +448,28 @@ class Sphinx(object):
                     'version.' % (extension, err))
         if ext_meta is None:
             ext_meta = {}
-        if not ext_meta.get('version'):
-            ext_meta['version'] = 'unknown version'
+            # special-case for compatibility
+            if extension == 'rst2pdf.pdfbuilder':
+                ext_meta = {'parallel_read_safe': True}
+        try:
+            if not ext_meta.get('version'):
+                ext_meta['version'] = 'unknown version'
+        except Exception:
+            self.warn('extension %r returned an unsupported object from '
+                      'its setup() function; it should return None or a '
+                      'metadata dictionary' % extension)
+            ext_meta = {'version': 'unknown version'}
         self._extensions[extension] = mod
         self._extension_metadata[extension] = ext_meta
 
     def require_sphinx(self, version):
         # check the Sphinx version if requested
-        if version > sphinx.__version__[:3]:
+        if version > sphinx.__display_version__[:3]:
             raise VersionRequirementError(version)
 
     def import_object(self, objname, source=None):
         """Import an object from a 'module.name' string."""
-        try:
-            module, name = objname.rsplit('.', 1)
-        except ValueError as err:
-            raise ExtensionError('Invalid full object name %s' % objname +
-                                 (source and ' (needed for %s)' % source or ''),
-                                 err)
-        try:
-            return getattr(__import__(module, None, None, [name]), name)
-        except ImportError as err:
-            raise ExtensionError('Could not import %s' % module +
-                                 (source and ' (needed for %s)' % source or ''),
-                                 err)
-        except AttributeError as err:
-            raise ExtensionError('Could not find %s' % objname +
-                                 (source and ' (needed for %s)' % source or ''),
-                                 err)
+        return import_object(objname, source=None)
 
     # event interface
 
@@ -495,8 +498,9 @@ class Sphinx(object):
     def emit(self, event, *args):
         try:
             self.debug2('[app] emitting event: %r%s', event, repr(args)[:100])
-        except Exception:  # not every object likes to be repr()'d (think
-                           # random stuff coming via autodoc)
+        except Exception:
+            # not every object likes to be repr()'d (think
+            # random stuff coming via autodoc)
             pass
         results = []
         if event in self._listeners:

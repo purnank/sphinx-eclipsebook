@@ -22,10 +22,13 @@ except ImportError:
 _ansi_re = re.compile('\x1b\\[(\\d\\d;){0,2}\\d\\dm')
 codes = {}
 
+
 def get_terminal_width():
     """Borrowed from the py lib."""
     try:
-        import termios, fcntl, struct
+        import termios
+        import fcntl
+        import struct
         call = fcntl.ioctl(0, termios.TIOCGWINSZ,
                            struct.pack('hhhh', 0, 0, 0, 0))
         height, width = struct.unpack('hhhh', call)[:2]
@@ -39,6 +42,8 @@ def get_terminal_width():
 
 
 _tw = get_terminal_width()
+
+
 def term_width_line(text):
     if not codes:
         # if no coloring, don't output fancy backspaces
@@ -46,6 +51,7 @@ def term_width_line(text):
     else:
         # codes are not displayed, this must be taken into account
         return text.ljust(_tw + len(text) - len(_ansi_re.sub('', text))) + '\r'
+
 
 def color_terminal():
     if sys.platform == 'win32' and colorama is not None:
@@ -68,14 +74,18 @@ def nocolor():
         colorama.deinit()
     codes.clear()
 
+
 def coloron():
     codes.update(_orig_codes)
+
 
 def colorize(name, text):
     return codes.get(name, '') + text + codes.get('reset', '')
 
+
 def strip_colors(s):
     return re.compile('\x1b.*?m').sub('', s)
+
 
 def create_color_func(name):
     def inner(text):

@@ -9,16 +9,16 @@
     :copyright: Copyright 2007-2015 by the Sphinx team, see AUTHORS.
     :license: BSD, see LICENSE for details.
 """
+from __future__ import absolute_import
 
 import re
 import sys
 import time
 import codecs
 from os import path
-# circumvent relative import
-doctest = __import__('doctest')
+import doctest
 
-from six import itervalues, StringIO, binary_type
+from six import itervalues, StringIO, binary_type, text_type, PY2
 from docutils import nodes
 from docutils.parsers.rst import directives
 
@@ -28,9 +28,29 @@ from sphinx.util import force_decode
 from sphinx.util.nodes import set_source_info
 from sphinx.util.compat import Directive
 from sphinx.util.console import bold
+from sphinx.util.osutil import fs_encoding
 
 blankline_re = re.compile(r'^\s*<BLANKLINE>', re.MULTILINE)
 doctestopt_re = re.compile(r'#\s*doctest:.+$', re.MULTILINE)
+
+if PY2:
+    def doctest_encode(text, encoding):
+        if isinstance(text, text_type):
+            text = text.encode(encoding)
+            if text.startswith(codecs.BOM_UTF8):
+                text = text[len(codecs.BOM_UTF8):]
+        return text
+else:
+    def doctest_encode(text, encoding):
+        return text
+
+
+class _SpoofOutSphinx(doctest._SpoofOut):
+    # override: convert console encoding to unicode
+    if PY2:
+        def getvalue(self):
+            result = doctest._SpoofOut.getvalue(self)
+            return result.decode('string_escape')
 
 
 # set up the necessary directives
@@ -164,6 +184,11 @@ class TestCode(object):
 
 
 class SphinxDocTestRunner(doctest.DocTestRunner):
+    def __init__(self, *args, **kw):
+        doctest.DocTestRunner.__init__(self, *args, **kw)
+        # Override a fake output target for capturing doctest output.
+        self._fakeout = _SpoofOutSphinx()
+
     def summarize(self, out, verbose=None):
         string_io = StringIO()
         old_stdout = sys.stdout
@@ -296,8 +321,8 @@ Doctest summary
 
         if self.config.doctest_test_doctest_blocks:
             def condition(node):
-                return (isinstance(node, (nodes.literal_block, nodes.comment))
-                        and 'testnodetype' in node) or \
+                return (isinstance(node, (nodes.literal_block, nodes.comment)) and
+                        'testnodetype' in node) or \
                     isinstance(node, nodes.doctest_block)
         else:
             def condition(node):
@@ -357,19 +382,25 @@ Doctest summary
         return compile(code, name, self.type, flags, dont_inherit)
 
     def test_group(self, group, filename):
+        if PY2:
+            filename_str = filename.encode(fs_encoding)
+        else:
+            filename_str = filename
+
         ns = {}
 
         def run_setup_cleanup(runner, testcodes, what):
             examples = []
             for testcode in testcodes:
-                examples.append(doctest.Example(testcode.code, '',
-                                                lineno=testcode.lineno))
+                examples.append(doctest.Example(
+                    doctest_encode(testcode.code, self.env.config.source_encoding), '',
+                    lineno=testcode.lineno))
             if not examples:
                 return True
             # simulate a doctest with the code
             sim_doctest = doctest.DocTest(examples, {},
                                           '%s (%s code)' % (group.name, what),
-                                          filename, 0, None)
+                                          filename_str, 0, None)
             sim_doctest.globs = ns
             old_f = runner.failures
             self.type = 'exec'  # the snippet may contain multiple statements
@@ -388,8 +419,9 @@ Doctest summary
             if len(code) == 1:
                 # ordinary doctests (code/output interleaved)
                 try:
-                    test = parser.get_doctest(code[0].code, {}, group.name,
-                                              filename, code[0].lineno)
+                    test = parser.get_doctest(
+                        doctest_encode(code[0].code, self.env.config.source_encoding), {},
+                        group.name, filename_str, code[0].lineno)
                 except Exception:
                     self.warn('ignoring invalid doctest code: %r' %
                               code[0].code,
@@ -415,12 +447,13 @@ Doctest summary
                     exc_msg = m.group('msg')
                 else:
                     exc_msg = None
-                example = doctest.Example(code[0].code, output,
-                                          exc_msg=exc_msg,
-                                          lineno=code[0].lineno,
-                                          options=options)
+                example = doctest.Example(
+                    doctest_encode(code[0].code, self.env.config.source_encoding), output,
+                    exc_msg=exc_msg,
+                    lineno=code[0].lineno,
+                    options=options)
                 test = doctest.DocTest([example], {}, group.name,
-                                       filename, code[0].lineno, None)
+                                       filename_str, code[0].lineno, None)
                 self.type = 'exec'  # multiple statements again
             # DocTest.__init__ copies the globs namespace, which we don't want
             test.globs = ns
@@ -443,4 +476,4 @@ def setup(app):
     app.add_config_value('doctest_test_doctest_blocks', 'default', False)
     app.add_config_value('doctest_global_setup', '', False)
     app.add_config_value('doctest_global_cleanup', '', False)
-    return {'version': sphinx.__version__, 'parallel_read_safe': True}
+    return {'version': sphinx.__display_version__, 'parallel_read_safe': True}

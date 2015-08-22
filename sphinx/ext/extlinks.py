@@ -52,11 +52,13 @@ def make_link_role(base_url, prefix):
         return [pnode], []
     return role
 
+
 def setup_link_roles(app):
     for name, (base_url, prefix) in iteritems(app.config.extlinks):
         app.add_role(name, make_link_role(base_url, prefix))
 
+
 def setup(app):
     app.add_config_value('extlinks', {}, 'env')
     app.connect('builder-inited', setup_link_roles)
-    return {'version': sphinx.__version__, 'parallel_read_safe': True}
+    return {'version': sphinx.__display_version__, 'parallel_read_safe': True}

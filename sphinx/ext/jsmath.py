@@ -22,6 +22,7 @@ def html_visit_math(self, node):
     self.body.append(self.encode(node['latex']) + '</span>')
     raise nodes.SkipNode
 
+
 def html_visit_displaymath(self, node):
     if node['nowrap']:
         self.body.append(self.starttag(node, 'div', CLASS='math'))
@@ -46,6 +47,7 @@ def html_visit_displaymath(self, node):
         self.body.append('</div>\n')
     raise nodes.SkipNode
 
+
 def builder_inited(app):
     if not app.config.jsmath_path:
         raise ExtensionError('jsmath_path config value must be set for the '
@@ -57,4 +59,4 @@ def setup(app):
     mathbase_setup(app, (html_visit_math, None), (html_visit_displaymath, None))
     app.add_config_value('jsmath_path', '', False)
     app.connect('builder-inited', builder_inited)
-    return {'version': sphinx.__version__, 'parallel_read_safe': True}
+    return {'version': sphinx.__display_version__, 'parallel_read_safe': True}

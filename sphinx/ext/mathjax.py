@@ -25,6 +25,7 @@ def html_visit_math(self, node):
                      self.builder.config.mathjax_inline[1] + '</span>')
     raise nodes.SkipNode
 
+
 def html_visit_displaymath(self, node):
     self.body.append(self.starttag(node, 'div', CLASS='math'))
     if node['nowrap']:
@@ -52,6 +53,7 @@ def html_visit_displaymath(self, node):
     self.body.append('</div>\n')
     raise nodes.SkipNode
 
+
 def builder_inited(app):
     if not app.config.mathjax_path:
         raise ExtensionError('mathjax_path config value must be set for the '
@@ -69,4 +71,4 @@ def setup(app):
     app.add_config_value('mathjax_inline', [r'\(', r'\)'], 'html')
     app.add_config_value('mathjax_display', [r'\[', r'\]'], 'html')
     app.connect('builder-inited', builder_inited)
-    return {'version': sphinx.__version__, 'parallel_read_safe': True}
+    return {'version': sphinx.__display_version__, 'parallel_read_safe': True}

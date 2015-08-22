@@ -17,7 +17,7 @@ import inspect
 import traceback
 from types import FunctionType, BuiltinFunctionType, MethodType
 
-from six import iteritems, itervalues, text_type, class_types
+from six import iteritems, itervalues, text_type, class_types, string_types
 from docutils import nodes
 from docutils.utils import assemble_option_dict
 from docutils.statemachine import ViewList
@@ -62,7 +62,9 @@ class DefDict(dict):
         return True
     __nonzero__ = __bool__  # for python2 compatibility
 
-identity = lambda x: x
+
+def identity(x):
+    return x
 
 
 class Options(dict):
@@ -886,7 +888,7 @@ class ModuleDocumenter(Documenter):
                 memberlist = self.object.__all__
                 # Sometimes __all__ is broken...
                 if not isinstance(memberlist, (list, tuple)) or not \
-                   all(isinstance(entry, str) for entry in memberlist):
+                   all(isinstance(entry, string_types) for entry in memberlist):
                     self.directive.warn(
                         '__all__ should be a list of strings, not %r '
                         '(in module %s) -- ignoring __all__' %
@@ -1311,9 +1313,9 @@ class AttributeDocumenter(DocstringStripSignatureMixin, ClassLevelDocumenter):
             isinstance(member, cls.method_types) and not \
             type(member).__name__ in ("type", "method_descriptor",
                                       "instancemethod")
-        return isdatadesc or (not isinstance(parent, ModuleDocumenter)
-                              and not inspect.isroutine(member)
-                              and not isinstance(member, class_types))
+        return isdatadesc or (not isinstance(parent, ModuleDocumenter) and
+                              not inspect.isroutine(member) and
+                              not isinstance(member, class_types))
 
     def document_members(self, all_members=False):
         pass
@@ -1523,7 +1525,7 @@ def setup(app):
     app.add_event('autodoc-process-signature')
     app.add_event('autodoc-skip-member')
 
-    return {'version': sphinx.__version__, 'parallel_read_safe': True}
+    return {'version': sphinx.__display_version__, 'parallel_read_safe': True}
 
 
 class testcls:

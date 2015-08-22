@@ -27,7 +27,8 @@ from sphinx.util.nodes import set_source_info
 from sphinx.util.compat import Directive
 
 
-class ifconfig(nodes.Element): pass
+class ifconfig(nodes.Element):
+    pass
 
 
 class IfConfig(Directive):
@@ -49,7 +50,7 @@ class IfConfig(Directive):
 
 
 def process_ifconfig_nodes(app, doctree, docname):
-    ns = {k: app.config[k] for k in app.config.values}
+    ns = dict((k, app.config[k]) for k in app.config.values)
     ns.update(app.config.__dict__.copy())
     ns['builder'] = app.builder.name
     for node in doctree.traverse(ifconfig):
@@ -74,4 +75,4 @@ def setup(app):
     app.add_node(ifconfig)
     app.add_directive('ifconfig', IfConfig)
     app.connect('doctree-resolved', process_ifconfig_nodes)
-    return {'version': sphinx.__version__, 'parallel_read_safe': True}
+    return {'version': sphinx.__display_version__, 'parallel_read_safe': True}

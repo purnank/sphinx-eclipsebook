@@ -14,7 +14,7 @@ import zipfile
 
 from sphinx.theming import Theme, ThemeError
 
-from util import with_app, raises
+from util import with_app, raises, TestApp
 
 
 @with_app(confoverrides={'html_theme': 'ziptheme',
@@ -26,7 +26,7 @@ def test_theme_api(app, status, warning):
     assert set(Theme.themes.keys()) == \
         set(['basic', 'default', 'scrolls', 'agogo', 'sphinxdoc', 'haiku',
              'traditional', 'testtheme', 'ziptheme', 'epub', 'nature',
-             'pyramid', 'bizstyle'])
+             'pyramid', 'bizstyle', 'classic'])
     assert Theme.themes['testtheme'][1] is None
     assert isinstance(Theme.themes['ziptheme'][1], zipfile.ZipFile)
 

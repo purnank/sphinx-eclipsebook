@@ -8,7 +8,8 @@
     :copyright: Copyright 2007-2015 by the Sphinx team, see AUTHORS.
     :license: BSD, see LICENSE for details.
 """
-
+import gettext
+import io
 from os import path
 from collections import namedtuple
 
@@ -16,9 +17,10 @@ from babel.messages.pofile import read_po
 from babel.messages.mofile import write_mo
 
 from sphinx.util.osutil import walk
+from sphinx.util import SEP
 
 
-LocaleFileInfoBase = namedtuple('CatalogInfo', 'base_dir,domain')
+LocaleFileInfoBase = namedtuple('CatalogInfo', 'base_dir,domain,charset')
 
 
 class CatalogInfo(LocaleFileInfoBase):
@@ -45,18 +47,41 @@ class CatalogInfo(LocaleFileInfoBase):
             path.getmtime(self.mo_path) < path.getmtime(self.po_path))
 
     def write_mo(self, locale):
-        with open(self.po_path, 'rt') as po:
-            with open(self.mo_path, 'wb') as mo:
+        with io.open(self.po_path, 'rt', encoding=self.charset) as po:
+            with io.open(self.mo_path, 'wb') as mo:
                 write_mo(mo, read_po(po, locale))
 
 
-def get_catalogs(locale_dirs, locale, gettext_compact=False, force_all=False):
+def find_catalog(docname, compaction):
+    if compaction:
+        ret = docname.split(SEP, 1)[0]
+    else:
+        ret = docname
+
+    return ret
+
+
+def find_catalog_files(docname, srcdir, locale_dirs, lang, compaction):
+    if not(lang and locale_dirs):
+        return []
+
+    domain = find_catalog(docname, compaction)
+    files = [gettext.find(domain, path.join(srcdir, dir_), [lang])
+             for dir_ in locale_dirs]
+    files = [path.relpath(f, srcdir) for f in files if f]
+    return files
+
+
+def find_catalog_source_files(locale_dirs, locale, domains=None, gettext_compact=False,
+                              charset='utf-8', force_all=False):
     """
     :param list locale_dirs:
        list of path as `['locale_dir1', 'locale_dir2', ...]` to find
        translation catalogs. Each path contains a structure such as
        `<locale>/LC_MESSAGES/domain.po`.
     :param str locale: a language as `'en'`
+    :param list domains: list of domain names to get. If empty list or None
+       is specified, get all domain names. default is None.
     :param boolean gettext_compact:
        * False: keep domains directory structure (default).
        * True: domains in the sub directory will be merged into 1 file.
@@ -70,6 +95,9 @@ def get_catalogs(locale_dirs, locale, gettext_compact=False, force_all=False):
 
     catalogs = set()
     for locale_dir in locale_dirs:
+        if not locale_dir:
+            continue  # skip system locale directory
+
         base_dir = path.join(locale_dir, locale, 'LC_MESSAGES')
 
         if not path.exists(base_dir):
@@ -82,7 +110,10 @@ def get_catalogs(locale_dirs, locale, gettext_compact=False, force_all=False):
                 domain = path.relpath(path.join(dirpath, base), base_dir)
                 if gettext_compact and path.sep in domain:
                     domain = path.split(domain)[0]
-                cat = CatalogInfo(base_dir, domain)
+                domain = domain.replace(path.sep, SEP)
+                if domains and domain not in domains:
+                    continue
+                cat = CatalogInfo(base_dir, domain, charset)
                 if force_all or cat.is_outdated():
                     catalogs.add(cat)
 

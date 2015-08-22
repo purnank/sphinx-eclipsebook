@@ -37,7 +37,7 @@ class ManualPageBuilder(Builder):
                       'will be written')
 
     def get_outdated_docs(self):
-        return 'all manpages' # for now
+        return 'all manpages'  # for now
 
     def get_target_uri(self, docname, typ=None):
         if typ == 'token':
@@ -70,7 +70,7 @@ class ManualPageBuilder(Builder):
             tree = self.env.get_doctree(docname)
             docnames = set()
             largetree = inline_all_toctrees(self, docnames, docname, tree,
-                                            darkgreen)
+                                            darkgreen, [docname])
             self.info('} ', nonl=True)
             self.env.resolve_references(largetree, docname, self)
             # remove pending_xref nodes

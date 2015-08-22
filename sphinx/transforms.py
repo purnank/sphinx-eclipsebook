@@ -20,8 +20,12 @@ from docutils.transforms.parts import ContentsFilter
 from sphinx import addnodes
 from sphinx.locale import _, init as init_locale
 from sphinx.util import split_index_msg
-from sphinx.util.nodes import traverse_translatable_index, extract_messages
-from sphinx.util.osutil import ustrftime, find_catalog
+from sphinx.util.nodes import (
+    traverse_translatable_index, extract_messages, LITERAL_TYPE_NODES, IMAGE_TYPE_NODES,
+)
+from sphinx.util.osutil import ustrftime
+from sphinx.util.i18n import find_catalog
+from sphinx.util.pycompat import indent
 from sphinx.domains.std import (
     make_term_from_paragraph_node,
     make_termnodes_from_paragraph_node,
@@ -156,6 +160,34 @@ class CitationReferences(Transform):
             citnode.parent.replace(citnode, refnode)
 
 
+TRANSLATABLE_NODES = {
+    'literal-block': nodes.literal_block,
+    'doctest-block': nodes.doctest_block,
+    'raw': nodes.raw,
+    'index': addnodes.index,
+    'image': nodes.image,
+}
+
+
+class ExtraTranslatableNodes(Transform):
+    """
+    make nodes translatable
+    """
+    default_priority = 10
+
+    def apply(self):
+        targets = self.document.settings.env.config.gettext_additional_targets
+        target_nodes = [v for k, v in TRANSLATABLE_NODES.items() if k in targets]
+        if not target_nodes:
+            return
+
+        def is_translatable_node(node):
+            return isinstance(node, tuple(target_nodes))
+
+        for node in self.document.traverse(is_translatable_node):
+            node['translatable'] = True
+
+
 class CustomLocaleReporter(object):
     """
     Replacer for document.reporter.get_source_and_line method.
@@ -177,7 +209,7 @@ class Locale(Transform):
     """
     Replace translatable nodes with their translated doctree.
     """
-    default_priority = 0
+    default_priority = 20
 
     def apply(self):
         env = self.document.settings.env
@@ -193,7 +225,8 @@ class Locale(Transform):
         dirs = [path.join(env.srcdir, directory)
                 for directory in env.config.locale_dirs]
         catalog, has_catalog = init_locale(dirs, env.config.language,
-                                           textdomain)
+                                           textdomain,
+                                           charset=env.config.source_encoding)
         if not has_catalog:
             return
 
@@ -214,6 +247,11 @@ class Locale(Transform):
             if msgstr.strip().endswith('::'):
                 msgstr += '\n\n   dummy literal'
                 # dummy literal node will discard by 'patch = patch[0]'
+
+            # literalblock need literal block notation to avoid it become
+            # paragraph.
+            if isinstance(node, LITERAL_TYPE_NODES):
+                msgstr = '::\n\n' + indent(msgstr, ' '*3)
 
             patch = new_document(source, settings)
             CustomLocaleReporter(node.source, node.line).set_reporter(patch)
@@ -239,8 +277,10 @@ class Locale(Transform):
                     # document nameids mapping with new name.
                     names = section_node.setdefault('names', [])
                     names.append(new_name)
-                    if old_name in names:
-                        names.remove(old_name)
+                    # Original section name (reference target name) should be kept to refer
+                    # from other nodes which is still not translated or uses explicit target
+                    # name like "`text to display <explicit target name_>`_"..
+                    # So, `old_name` is still exist in `names`.
 
                     _id = self.document.nameids.get(old_name, None)
                     explicit = self.document.nametypes.get(old_name, None)
@@ -248,29 +288,35 @@ class Locale(Transform):
                     # * if explicit: _id is label. title node need another id.
                     # * if not explicit:
                     #
-                    #   * _id is None:
+                    #   * if _id is None:
                     #
-                    #     _id is None means _id was duplicated.
-                    #     old_name entry still exists in nameids and
-                    #     nametypes for another duplicated entry.
+                    #     _id is None means:
                     #
-                    #   * _id is provided: bellow process
-                    if not explicit and _id:
-                        # _id was not duplicated.
-                        # remove old_name entry from document ids database
-                        # to reuse original _id.
-                        self.document.nameids.pop(old_name, None)
-                        self.document.nametypes.pop(old_name, None)
-                        self.document.ids.pop(_id, None)
+                    #     1. _id was not provided yet.
+                    #
+                    #     2. _id was duplicated.
+                    #
+                    #        old_name entry still exists in nameids and
+                    #        nametypes for another duplicated entry.
+                    #
+                    #   * if _id is provided: bellow process
+                    if _id:
+                        if not explicit:
+                            # _id was not duplicated.
+                            # remove old_name entry from document ids database
+                            # to reuse original _id.
+                            self.document.nameids.pop(old_name, None)
+                            self.document.nametypes.pop(old_name, None)
+                            self.document.ids.pop(_id, None)
 
-                    # re-entry with new named section node.
-                    #
-                    # Note: msgnode that is a second parameter of the
-                    # `note_implicit_target` is not necessary here because
-                    # section_node has been noted previously on rst parsing by
-                    # `docutils.parsers.rst.states.RSTState.new_subsection()`
-                    # and already has `system_message` if needed.
-                    self.document.note_implicit_target(section_node)
+                        # re-entry with new named section node.
+                        #
+                        # Note: msgnode that is a second parameter of the
+                        # `note_implicit_target` is not necessary here because
+                        # section_node has been noted previously on rst parsing by
+                        # `docutils.parsers.rst.states.RSTState.new_subsection()`
+                        # and already has `system_message` if needed.
+                        self.document.note_implicit_target(section_node)
 
                     # replace target's refname to new target name
                     def is_named_target(node):
@@ -325,6 +371,11 @@ class Locale(Transform):
                 msgstr += '\n\n   dummy literal'
                 # dummy literal node will discard by 'patch = patch[0]'
 
+            # literalblock need literal block notation to avoid it become
+            # paragraph.
+            if isinstance(node, LITERAL_TYPE_NODES):
+                msgstr = '::\n\n' + indent(msgstr, ' '*3)
+
             patch = new_document(source, settings)
             CustomLocaleReporter(node.source, node.line).set_reporter(patch)
             parser.parse(msgstr, patch)
@@ -333,7 +384,9 @@ class Locale(Transform):
             except IndexError:  # empty node
                 pass
             # XXX doctest and other block markup
-            if not isinstance(patch, nodes.paragraph):
+            if not isinstance(
+                    patch,
+                    (nodes.paragraph,) + LITERAL_TYPE_NODES + IMAGE_TYPE_NODES):
                 continue  # skip for now
 
             # auto-numbered foot note reference should use original 'ids'.
@@ -460,9 +513,17 @@ class Locale(Transform):
             for child in patch.children:
                 child.parent = node
             node.children = patch.children
+
+            # for highlighting that expects .rawsource and .astext() are same.
+            if isinstance(node, LITERAL_TYPE_NODES):
+                node.rawsource = node.astext()
+
+            if isinstance(node, IMAGE_TYPE_NODES):
+                node.update_all_atts(patch)
+
             node['translated'] = True
 
-        if 'index' in env.config.gettext_enables:
+        if 'index' in env.config.gettext_additional_targets:
             # Extract and translate messages for index entries.
             for node, entries in traverse_translatable_index(self.document):
                 new_entries = []

@@ -63,7 +63,8 @@ def dedent_lines(lines, dedent):
 
 
 def container_wrapper(directive, literal_node, caption):
-    container_node = nodes.container('', literal_block=True)
+    container_node = nodes.container('', literal_block=True,
+                                     classes=['literal-block-wrapper'])
     parsed = nodes.Element()
     directive.state.nested_parse(ViewList([caption], source=''),
                                  directive.content_offset, parsed)
@@ -92,6 +93,7 @@ class CodeBlock(Directive):
         'lineno-start': int,
         'emphasize-lines': directives.unchanged_required,
         'caption': directives.unchanged_required,
+        'name': directives.unchanged,
     }
 
     def run(self):
@@ -126,7 +128,12 @@ class CodeBlock(Directive):
 
         caption = self.options.get('caption')
         if caption:
+            self.options.setdefault('name', nodes.fully_normalize_name(caption))
             literal = container_wrapper(self, literal, caption)
+
+        # literal will be note_implicit_target that is linked from caption and numref.
+        # when options['name'] is provided, it should be primary ID.
+        self.add_name(literal)
 
         return [literal]
 
@@ -158,6 +165,7 @@ class LiteralInclude(Directive):
         'append': directives.unchanged_required,
         'emphasize-lines': directives.unchanged_required,
         'caption': directives.unchanged,
+        'name': directives.unchanged,
         'diff': directives.unchanged_required,
     }
 
@@ -211,7 +219,7 @@ class LiteralInclude(Directive):
 
         lines = self.read_with_encoding(filename, document,
                                         codec_info, encoding)
-        if not isinstance(lines[0], string_types):
+        if lines and not isinstance(lines[0], string_types):
             return lines
 
         diffsource = self.options.get('diff')
@@ -294,15 +302,6 @@ class LiteralInclude(Directive):
                     res.append(line)
             lines = res
 
-        if 'lineno-match' in self.options:
-            # handle that docutils remove preceding lines which only contains
-            # line separation.
-            for line in lines:
-                # check if line contains anything else than line separation.
-                if line and line.splitlines()[0]:
-                    break
-                linenostart += 1
-
         prepend = self.options.get('prepend')
         if prepend:
             lines.insert(0, prepend + '\n')
@@ -331,10 +330,14 @@ class LiteralInclude(Directive):
 
         caption = self.options.get('caption')
         if caption is not None:
-            if caption:
-                retnode = container_wrapper(self, retnode, caption)
-            else:
-                retnode = container_wrapper(self, retnode, self.arguments[0])
+            if not caption:
+                caption = self.arguments[0]
+            self.options.setdefault('name', nodes.fully_normalize_name(caption))
+            retnode = container_wrapper(self, retnode, caption)
+
+        # retnode will be note_implicit_target that is linked from caption and numref.
+        # when options['name'] is provided, it should be primary ID.
+        self.add_name(retnode)
 
         return [retnode]
 

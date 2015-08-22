@@ -90,13 +90,15 @@ class PyXrefMixin(object):
         result = super(PyXrefMixin, self).make_xref(rolename, domain, target,
                                                     innernode, contnode)
         result['refspecific'] = True
-        if target.startswith('.'):
-            result['reftarget'] = target[1:]
-            result[0][0] = nodes.Text(target[1:])
-        if target.startswith('~'):
-            result['reftarget'] = target[1:]
-            title = target.split('.')[-1]
-            result[0][0] = nodes.Text(title)
+        if target.startswith(('.', '~')):
+            prefix, result['reftarget'] = target[0], target[1:]
+            if prefix == '.':
+                text = target[1:]
+            elif prefix == '~':
+                text = target.split('.')[-1]
+            for node in result.traverse(nodes.Text):
+                node.parent[node.parent.index(node)] = nodes.Text(text)
+                break
         return result
 
 
@@ -492,8 +494,8 @@ class PyXRefRole(XRefRole):
         refnode['py:module'] = env.ref_context.get('py:module')
         refnode['py:class'] = env.ref_context.get('py:class')
         if not has_explicit_title:
-            title = title.lstrip('.')   # only has a meaning for the target
-            target = target.lstrip('~') # only has a meaning for the title
+            title = title.lstrip('.')    # only has a meaning for the target
+            target = target.lstrip('~')  # only has a meaning for the title
             # if the first character is a tilde, don't display the module/class
             # parts of the contents
             if title[0:1] == '~':
@@ -629,10 +631,10 @@ class PythonDomain(Domain):
     ]
 
     def clear_doc(self, docname):
-        for fullname, (fn, _) in list(self.data['objects'].items()):
+        for fullname, (fn, _l) in list(self.data['objects'].items()):
             if fn == docname:
                 del self.data['objects'][fullname]
-        for modname, (fn, _, _, _) in list(self.data['modules'].items()):
+        for modname, (fn, _x, _x, _x) in list(self.data['modules'].items()):
             if fn == docname:
                 del self.data['modules'][modname]
 
@@ -680,8 +682,8 @@ class PythonDomain(Domain):
                         # "fuzzy" searching mode
                         searchname = '.' + name
                         matches = [(oname, objects[oname]) for oname in objects
-                                   if oname.endswith(searchname)
-                                   and objects[oname][1] in objtypes]
+                                   if oname.endswith(searchname) and
+                                   objects[oname][1] in objtypes]
         else:
             # NOTE: searching for exact match, object type is not considered
             if name in objects:
@@ -694,15 +696,15 @@ class PythonDomain(Domain):
             elif modname and modname + '.' + name in objects:
                 newname = modname + '.' + name
             elif modname and classname and \
-                     modname + '.' + classname + '.' + name in objects:
+                    modname + '.' + classname + '.' + name in objects:
                 newname = modname + '.' + classname + '.' + name
             # special case: builtin exceptions have module "exceptions" set
             elif type == 'exc' and '.' not in name and \
-                 'exceptions.' + name in objects:
+                    'exceptions.' + name in objects:
                 newname = 'exceptions.' + name
             # special case: object methods
             elif type in ('func', 'meth') and '.' not in name and \
-                 'object.' + name in objects:
+                    'object.' + name in objects:
                 newname = 'object.' + name
         if newname is not None:
             matches.append((newname, objects[newname]))

@@ -22,7 +22,7 @@ import optparse
 from os import path
 
 from sphinx.util.osutil import walk
-from sphinx import __version__
+from sphinx import __display_version__
 
 # automodule options
 if 'SPHINX_APIDOC_OPTIONS' in os.environ:
@@ -112,8 +112,8 @@ def create_package_file(root, master_package, subroot, py_files, opts, subs):
         text += '\n'
 
     submods = [path.splitext(sub)[0] for sub in py_files
-               if not shall_skip(path.join(root, sub), opts)
-               and sub != INITPY]
+               if not shall_skip(path.join(root, sub), opts) and
+               sub != INITPY]
     if submods:
         text += format_heading(2, 'Submodules')
         if opts.separatemodules:
@@ -212,8 +212,8 @@ def recurse_tree(rootpath, excludes, opts):
             exclude_prefixes = ('.',)
         else:
             exclude_prefixes = ('.', '_')
-        subs[:] = sorted(sub for sub in subs if not sub.startswith(exclude_prefixes)
-                         and not is_excluded(path.join(root, sub), excludes))
+        subs[:] = sorted(sub for sub in subs if not sub.startswith(exclude_prefixes) and
+                         not is_excluded(path.join(root, sub), excludes))
 
         if is_pkg:
             # we are in a package with something to document
@@ -238,7 +238,7 @@ def recurse_tree(rootpath, excludes, opts):
 
 def normalize_excludes(rootpath, excludes):
     """Normalize the excluded directory list."""
-    return [path.normpath(path.abspath(exclude)) for exclude in excludes]
+    return [path.abspath(exclude) for exclude in excludes]
 
 
 def is_excluded(root, excludes):
@@ -247,7 +247,6 @@ def is_excluded(root, excludes):
     Note: by having trailing slashes, we avoid common prefix issues, like
           e.g. an exlude "foo" also accidentally excluding "foobar".
     """
-    root = path.normpath(root)
     for exclude in excludes:
         if root == exclude:
             return True
@@ -318,7 +317,7 @@ Note: By default this script will not overwrite already created files.""")
     (opts, args) = parser.parse_args(argv[1:])
 
     if opts.show_version:
-        print('Sphinx (sphinx-apidoc) %s' % __version__)
+        print('Sphinx (sphinx-apidoc) %s' % __display_version__)
         return 0
 
     if not args:
@@ -328,7 +327,7 @@ Note: By default this script will not overwrite already created files.""")
     if not opts.destdir:
         parser.error('An output directory is required.')
     if opts.header is None:
-        opts.header = path.normpath(rootpath).split(path.sep)[-1]
+        opts.header = path.abspath(rootpath).split(path.sep)[-1]
     if opts.suffix.startswith('.'):
         opts.suffix = opts.suffix[1:]
     if not path.isdir(rootpath):
@@ -337,7 +336,7 @@ Note: By default this script will not overwrite already created files.""")
     if not path.isdir(opts.destdir):
         if not opts.dryrun:
             os.makedirs(opts.destdir)
-    rootpath = path.normpath(path.abspath(rootpath))
+    rootpath = path.abspath(rootpath)
     excludes = normalize_excludes(rootpath, excludes)
     modules = recurse_tree(rootpath, excludes, opts)
     if opts.full:

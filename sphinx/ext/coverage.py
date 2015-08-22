@@ -20,12 +20,14 @@ from six.moves import cPickle as pickle
 
 import sphinx
 from sphinx.builders import Builder
+from sphinx.util.inspect import safe_getattr
 
 
 # utility
 def write_header(f, text, char='-'):
     f.write(text + '\n')
     f.write(char * len(text) + '\n')
+
 
 def compile_regex_list(name, exps, warnfunc):
     lst = []
@@ -186,7 +188,10 @@ class CoverageBuilder(Builder):
                         for attr_name in dir(obj):
                             if attr_name not in obj.__dict__:
                                 continue
-                            attr = getattr(obj, attr_name)
+                            try:
+                                attr = safe_getattr(obj, attr_name)
+                            except AttributeError:
+                                continue
                             if not (inspect.ismethod(attr) or
                                     inspect.isfunction(attr)):
                                 continue
@@ -231,7 +236,7 @@ class CoverageBuilder(Builder):
                     if undoc['classes']:
                         op.write('Classes:\n')
                         for name, methods in sorted(
-                                                 iteritems(undoc['classes'])):
+                                iteritems(undoc['classes'])):
                             if not methods:
                                 op.write(' * %s\n' % name)
                             else:
@@ -265,4 +270,4 @@ def setup(app):
     app.add_config_value('coverage_ignore_c_items', {}, False)
     app.add_config_value('coverage_write_headline', True, False)
     app.add_config_value('coverage_skip_undoc_in_source', False, False)
-    return {'version': sphinx.__version__, 'parallel_read_safe': True}
+    return {'version': sphinx.__display_version__, 'parallel_read_safe': True}

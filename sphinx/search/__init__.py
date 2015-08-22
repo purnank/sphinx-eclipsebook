@@ -13,6 +13,7 @@ import re
 from six import iteritems, itervalues, text_type, string_types
 from six.moves import cPickle as pickle
 from docutils.nodes import raw, comment, title, Text, NodeVisitor, SkipNode
+from os import path
 
 from sphinx.util import jsdump, rpartition
 
@@ -42,6 +43,7 @@ class SearchLanguage(object):
     lang = None
     language_name = None
     stopwords = set()
+    js_stemmer_rawcode = None
     js_stemmer_code = """
 /**
  * Dummy stemmer for languages without stemming rules.
@@ -110,7 +112,7 @@ def parse_stop_word(source):
     """
     result = set()
     for line in source.splitlines():
-        line = line.split('|')[0] # remove comment
+        line = line.split('|')[0]  # remove comment
         result.update(line.split())
     return result
 
@@ -292,7 +294,7 @@ class IndexBuilder(object):
                     if otype:
                         # use unicode() to fire translation proxies
                         onames[typeindex] = (domainname, type,
-                            text_type(domain.get_type_name(otype)))
+                                             text_type(domain.get_type_name(otype)))
                     else:
                         onames[typeindex] = (domainname, type, type)
                 if anchor == fullname:
@@ -318,8 +320,7 @@ class IndexBuilder(object):
 
     def freeze(self):
         """Create a usable data structure for serializing."""
-        filenames = sorted(self._titles.keys())
-        titles = sorted(self._titles.values())
+        filenames, titles = zip(*sorted(self._titles.items()))
         fn2index = dict((f, i) for (i, f) in enumerate(filenames))
         terms, title_terms = self.get_terms(fn2index)
 
@@ -360,7 +361,7 @@ class IndexBuilder(object):
             except KeyError:
                 self._stem_cache[word] = self.lang.stem(word)
                 return self._stem_cache[word]
-        _filter =  self.lang.word_filter
+        _filter = self.lang.word_filter
 
         for word in visitor.found_title_words:
             word = stem(word)
@@ -375,7 +376,14 @@ class IndexBuilder(object):
     def context_for_searchtool(self):
         return dict(
             search_language_stemming_code = self.lang.js_stemmer_code,
-            search_language_stop_words =
-                jsdump.dumps(sorted(self.lang.stopwords)),
+            search_language_stop_words = jsdump.dumps(sorted(self.lang.stopwords)),
             search_scorer_tool = self.js_scorer_code,
         )
+
+    def get_js_stemmer_rawcode(self):
+        if self.lang.js_stemmer_rawcode:
+            return path.join(
+                path.dirname(path.abspath(__file__)),
+                'non-minified-js',
+                self.lang.js_stemmer_rawcode
+            )

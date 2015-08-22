@@ -10,7 +10,8 @@
 """
 
 import re
-from os import path
+from os import path, environ
+import shlex
 
 from six import PY3, iteritems, string_types, binary_type, integer_types
 
@@ -26,6 +27,10 @@ if PY3:
     CONFIG_SYNTAX_ERROR += "\nDid you change the syntax from 2.x to 3.x?"
 CONFIG_EXIT_ERROR = "The configuration file (or one of the modules it imports) " \
                     "called sys.exit()"
+
+IGNORE_CONFIG_TYPE_CHECKS = (
+    'html_domain_indices', 'latex_domain_indices', 'texinfo_domain_indices'
+)
 
 
 class Config(object):
@@ -51,8 +56,9 @@ class Config(object):
         locale_dirs = ([], 'env'),
 
         master_doc = ('contents', 'env'),
-        source_suffix = ('.rst', 'env'),
+        source_suffix = (['.rst'], 'env'),
         source_encoding = ('utf-8-sig', 'env'),
+        source_parsers = ({}, 'env'),
         exclude_patterns = ([], 'env'),
         default_role = (None, 'env'),
         add_function_parentheses = (True, 'env'),
@@ -82,11 +88,11 @@ class Config(object):
                          'env'),
 
         # HTML options
-        html_theme = ('default', 'html'),
+        html_theme = ('alabaster', 'html'),
         html_theme_path = ([], 'html'),
         html_theme_options = ({}, 'html'),
         html_title = (lambda self: l_('%s %s documentation') %
-                                   (self.project, self.release),
+                      (self.project, self.release),
                       'html'),
         html_short_title = (lambda self: self.html_title, 'html'),
         html_style = (None, 'html'),
@@ -119,6 +125,7 @@ class Config(object):
         html_search_language = (None, 'html'),
         html_search_options = ({}, 'html'),
         html_search_scorer = ('', None),
+        html_scaled_image_link = (True, 'html'),
 
         # HTML help only options
         htmlhelp_basename = (lambda self: make_filename(self.project), None),
@@ -128,6 +135,35 @@ class Config(object):
 
         # Devhelp only options
         devhelp_basename = (lambda self: make_filename(self.project), None),
+
+        # Apple help options
+        applehelp_bundle_name = (lambda self: make_filename(self.project),
+                                 'applehelp'),
+        applehelp_bundle_id = (None, 'applehelp'),
+        applehelp_dev_region = ('en-us', 'applehelp'),
+        applehelp_bundle_version = ('1', 'applehelp'),
+        applehelp_icon = (None, 'applehelp'),
+        applehelp_kb_product = (lambda self: '%s-%s' %
+                                (make_filename(self.project), self.release),
+                                'applehelp'),
+        applehelp_kb_url = (None, 'applehelp'),
+        applehelp_remote_url = (None, 'applehelp'),
+        applehelp_index_anchors = (False, 'applehelp'),
+        applehelp_min_term_length = (None, 'applehelp'),
+        applehelp_stopwords = (lambda self: self.language or 'en', 'applehelp'),
+        applehelp_locale = (lambda self: self.language or 'en', 'applehelp'),
+        applehelp_title = (lambda self: self.project + ' Help', 'applehelp'),
+        applehelp_codesign_identity = (lambda self:
+                                       environ.get('CODE_SIGN_IDENTITY', None),
+                                       'applehelp'),
+        applehelp_codesign_flags = (lambda self:
+                                    shlex.split(
+                                        environ.get('OTHER_CODE_SIGN_FLAGS',
+                                                    '')),
+                                    'applehelp'),
+        applehelp_indexer_path = ('/usr/bin/hiutil', 'applehelp'),
+        applehelp_codesign_path = ('/usr/bin/codesign', 'applehelp'),
+        applehelp_disable_external_tools = (False, None),
 
         # Epub options
         epub_basename = (lambda self: make_filename(self.project), None),
@@ -220,7 +256,7 @@ class Config(object):
         gettext_location = (True, 'gettext'),
         gettext_uuid = (False, 'gettext'),
         gettext_auto_build = (True, 'env'),
-        gettext_enables = ([], 'env'),
+        gettext_additional_targets = ([], 'env'),
 
         # XML options
         xml_pretty = (True, 'env'),
@@ -230,7 +266,7 @@ class Config(object):
         self.overrides = overrides
         self.values = Config.config_values.copy()
         config = {}
-        if 'extensions' in overrides: #XXX do we need this?
+        if 'extensions' in overrides:  # XXX do we need this?
             if isinstance(overrides['extensions'], string_types):
                 config['extensions'] = overrides.pop('extensions').split(',')
             else:
@@ -261,6 +297,8 @@ class Config(object):
         # NB. since config values might use l_() we have to wait with calling
         # this method until i18n is initialized
         for name in self._raw_config:
+            if name in IGNORE_CONFIG_TYPE_CHECKS:
+                continue  # for a while, ignore multiple types config value. see #1781
             if name not in Config.config_values:
                 continue  # we don't know a default value
             default, dummy_rebuild = Config.config_values[name]
@@ -271,13 +309,13 @@ class Config(object):
             current = self[name]
             if type(current) is type(default):
                 continue
-            common_bases = (set(type(current).__bases__ + (type(current),))
-                          & set(type(default).__bases__))
+            common_bases = (set(type(current).__bases__ + (type(current),)) &
+                            set(type(default).__bases__))
             common_bases.discard(object)
             if common_bases:
                 continue  # at least we share a non-trivial base class
-            warn("the config value %r has type `%s', defaults to `%s.'"
-                    % (name, type(current).__name__, type(default).__name__))
+            warn("the config value %r has type `%s', defaults to `%s.'" %
+                 (name, type(current).__name__, type(default).__name__))
 
     def check_unicode(self, warn):
         # check all string values for non-ASCII characters in bytestrings,
@@ -286,8 +324,7 @@ class Config(object):
             if isinstance(value, binary_type) and nonascii_re.search(value):
                 warn('the config value %r is set to a string with non-ASCII '
                      'characters; this can lead to Unicode errors occurring. '
-                     'Please use Unicode strings, e.g. %r.' % (name, u'Content')
-                )
+                     'Please use Unicode strings, e.g. %r.' % (name, u'Content'))
 
     def init_values(self, warn):
         config = self._raw_config
@@ -326,6 +363,8 @@ class Config(object):
         for name in config:
             if name in self.values:
                 self.__dict__[name] = config[name]
+        if isinstance(self.source_suffix, string_types):
+            self.source_suffix = [self.source_suffix]
 
     def __getattr__(self, name):
         if name.startswith('_'):

@@ -23,7 +23,8 @@ from six import iteritems
 from sphinx.builders import Builder
 from sphinx.util import split_index_msg
 from sphinx.util.nodes import extract_messages, traverse_translatable_index
-from sphinx.util.osutil import safe_relpath, ensuredir, find_catalog, SEP
+from sphinx.util.osutil import safe_relpath, ensuredir, SEP
+from sphinx.util.i18n import find_catalog
 from sphinx.util.console import darkgreen, purple, bold
 from sphinx.locale import pairindextypes
 
@@ -113,7 +114,7 @@ class I18nBuilder(Builder):
         for node, msg in extract_messages(doctree):
             catalog.add(msg, node)
 
-        if 'index' in self.env.config.gettext_enables:
+        if 'index' in self.env.config.gettext_additional_targets:
             # Extract translatable messages from index entries.
             for node, entries in traverse_translatable_index(doctree):
                 for typ, msg, tid, main in entries:
@@ -129,6 +130,7 @@ class I18nBuilder(Builder):
 timestamp = time()
 tzdelta = datetime.fromtimestamp(timestamp) - \
     datetime.utcfromtimestamp(timestamp)
+
 
 class LocalTimeZone(tzinfo):
 
@@ -213,8 +215,8 @@ class MessageCatalogBuilder(I18nBuilder):
 
                     if self.config.gettext_location:
                         # generate "#: file1:line1\n#: file2:line2 ..."
-                        pofile.write("#: %s\n" % "\n#: ".join("%s:%s" %
-                            (safe_relpath(source, self.outdir), line)
+                        pofile.write("#: %s\n" % "\n#: ".join(
+                            "%s:%s" % (safe_relpath(source, self.outdir), line)
                             for source, line, _ in positions))
                     if self.config.gettext_uuid:
                         # generate "# uuid1\n# uuid2\n ..."
@@ -223,8 +225,8 @@ class MessageCatalogBuilder(I18nBuilder):
 
                     # message contains *one* line of text ready for translation
                     message = message.replace('\\', r'\\'). \
-                                      replace('"', r'\"'). \
-                                      replace('\n', '\\n"\n"')
+                        replace('"', r'\"'). \
+                        replace('\n', '\\n"\n"')
                     pofile.write('msgid "%s"\nmsgstr ""\n\n' % message)
 
             finally:

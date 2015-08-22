@@ -27,7 +27,7 @@ from util import tempdir, rootdir, path, gen_with_app, SkipTest, \
 root = tempdir / 'test-intl'
 
 
-def gen_with_intl_app(*args, **kw):
+def gen_with_intl_app(builder, confoverrides={}, *args, **kw):
     default_kw = {
         'testroot': 'intl',
         'confoverrides': {
@@ -36,7 +36,8 @@ def gen_with_intl_app(*args, **kw):
         },
     }
     default_kw.update(kw)
-    return gen_with_app(*args, **default_kw)
+    default_kw['confoverrides'].update(confoverrides)
+    return gen_with_app(builder, *args, **default_kw)
 
 
 def setup_module():
@@ -98,6 +99,11 @@ def assert_elem(elem, texts=None, refs=None, names=None):
     if names is not None:
         _names = elem.attrib.get('names').split()
         assert _names == names
+
+
+def assert_count(expected_expr, result, count):
+    find_pair = (expected_expr, result)
+    return assert_equal, len(re.findall(*find_pair)), count, find_pair
 
 
 @gen_with_intl_app('text', freshenv=True)
@@ -177,7 +183,10 @@ def test_text_builder(app, status, warning):
               u"\nSOME TERM"
               u"\n   THE CORRESPONDING DEFINITION\n"
               u"\nSOME OTHER TERM"
-              u"\n   THE CORRESPONDING DEFINITION #2\n")
+              u"\n   THE CORRESPONDING DEFINITION #2\n"
+              u"\nSOME TERM WITH : CLASSIFIER1 : CLASSIFIER2"
+              u"\n   THE CORRESPONDING DEFINITION\n"
+              )
     yield assert_equal, result, expect
 
     # --- glossary terms: regression test for #1090
@@ -221,7 +230,7 @@ def test_text_builder(app, status, warning):
 
     # --- figure captions: regression test for #940
 
-    result = (app.outdir / 'figure_caption.txt').text(encoding='utf-8')
+    result = (app.outdir / 'figure.txt').text(encoding='utf-8')
     expect = (u"\nI18N WITH FIGURE CAPTION"
               u"\n************************\n"
               u"\n   [image]MY CAPTION OF THE FIGURE\n"
@@ -233,7 +242,16 @@ def test_text_builder(app, status, warning):
               u"\nBLOCK\n"
               u"\n      [image]MY CAPTION OF THE FIGURE\n"
               u"\n      MY DESCRIPTION PARAGRAPH1 OF THE FIGURE.\n"
-              u"\n      MY DESCRIPTION PARAGRAPH2 OF THE FIGURE.\n")
+              u"\n      MY DESCRIPTION PARAGRAPH2 OF THE FIGURE.\n"
+              u"\n"
+              u"\n"
+              u"IMAGE URL AND ALT\n"
+              u"=================\n"
+              u"\n"
+              u"[image: i18n][image]\n"
+              u"\n"
+              u"   [image: img][image]\n"
+              )
     yield assert_equal, result, expect
 
     # --- rubric: regression test for pull request #190
@@ -254,21 +272,21 @@ def test_text_builder(app, status, warning):
     result = (app.outdir / 'docfields.txt').text(encoding='utf-8')
     expect = (u"\nI18N WITH DOCFIELDS"
               u"\n*******************\n"
-              u"\nclass class Cls1\n"
+              u"\nclass Cls1\n"
               u"\n   Parameters:"
               u"\n      **param** -- DESCRIPTION OF PARAMETER param\n"
-              u"\nclass class Cls2\n"
+              u"\nclass Cls2\n"
               u"\n   Parameters:"
               u"\n      * **foo** -- DESCRIPTION OF PARAMETER foo\n"
               u"\n      * **bar** -- DESCRIPTION OF PARAMETER bar\n"
-              u"\nclass class Cls3(values)\n"
+              u"\nclass Cls3(values)\n"
               u"\n   Raises ValueError:"
               u"\n      IF THE VALUES ARE OUT OF RANGE\n"
-              u"\nclass class Cls4(values)\n"
+              u"\nclass Cls4(values)\n"
               u"\n   Raises:"
               u"\n      * **TypeError** -- IF THE VALUES ARE NOT VALID\n"
               u"\n      * **ValueError** -- IF THE VALUES ARE OUT OF RANGE\n"
-              u"\nclass class Cls5\n"
+              u"\nclass Cls5\n"
               u"\n   Returns:"
               u'\n      A NEW "Cls3" INSTANCE\n')
     yield assert_equal, result, expect
@@ -621,3 +639,123 @@ def test_xml_builder(app, status, warning):
            ['label-bridged-target-section',
             'section-and-label',
             'section-and-label'])
+
+
+@gen_with_intl_app('html', freshenv=True)
+def test_additional_targets_should_not_be_translated(app, status, warning):
+    app.builder.build_all()
+
+    ## literalblock.txt
+    result = (app.outdir / 'literalblock.html').text(encoding='utf-8')
+
+    # title should be translated
+    expected_expr = 'CODE-BLOCKS'
+    yield assert_count(expected_expr, result, 2)
+
+    # ruby code block should not be translated but be highlighted
+    expected_expr = """<span class="s1">&#39;result&#39;</span>"""
+    yield assert_count(expected_expr, result, 1)
+
+    # C code block without lang should not be translated and *ruby* highlighted
+    expected_expr = """<span class="c1">#include &lt;stdlib.h&gt;</span>"""
+    yield assert_count(expected_expr, result, 1)
+
+    # C code block with lang should not be translated but be *C* highlighted
+    expected_expr = """<span class="cp">#include &lt;stdio.h&gt;</span>"""
+    yield assert_count(expected_expr, result, 1)
+
+    # doctest block should not be translated but be highlighted
+    expected_expr = (
+        """<span class="gp">&gt;&gt;&gt; </span>"""
+        """<span class="kn">import</span> <span class="nn">sys</span>  """
+        """<span class="c"># sys importing</span>""")
+    yield assert_count(expected_expr, result, 1)
+
+    ## raw.txt
+
+    result = (app.outdir / 'raw.html').text(encoding='utf-8')
+
+    # raw block should not be translated
+    expected_expr = """<iframe src="http://sphinx-doc.org"></iframe></div>"""
+    yield assert_count(expected_expr, result, 1)
+
+    ## figure.txt
+
+    result = (app.outdir / 'figure.html').text(encoding='utf-8')
+
+    # alt and src for image block should not be translated
+    expected_expr = """<img alt="i18n" src="_images/i18n.png" />"""
+    yield assert_count(expected_expr, result, 1)
+
+    # alt and src for figure block should not be translated
+    expected_expr = """<img alt="img" src="_images/img.png" />"""
+    yield assert_count(expected_expr, result, 1)
+
+
+@gen_with_intl_app('html', freshenv=True,
+                   confoverrides={
+                       'gettext_additional_targets': [
+                           'index',
+                           'literal-block',
+                           'doctest-block',
+                           'raw',
+                           'image',
+                       ],
+                   })
+def test_additional_targets_should_be_translated(app, status, warning):
+    app.builder.build_all()
+
+    ## literalblock.txt
+    result = (app.outdir / 'literalblock.html').text(encoding='utf-8')
+
+    # title should be translated
+    expected_expr = 'CODE-BLOCKS'
+    yield assert_count(expected_expr, result, 2)
+
+    # ruby code block should be translated and be highlighted
+    expected_expr = """<span class="s1">&#39;RESULT&#39;</span>"""
+    yield assert_count(expected_expr, result, 1)
+
+    # C code block without lang should be translated and *ruby* highlighted
+    expected_expr = """<span class="c1">#include &lt;STDLIB.H&gt;</span>"""
+    yield assert_count(expected_expr, result, 1)
+
+    # C code block with lang should be translated and be *C* highlighted
+    expected_expr = """<span class="cp">#include &lt;STDIO.H&gt;</span>"""
+    yield assert_count(expected_expr, result, 1)
+
+    # doctest block should not be translated but be highlighted
+    expected_expr = (
+        """<span class="gp">&gt;&gt;&gt; </span>"""
+        """<span class="kn">import</span> <span class="nn">sys</span>  """
+        """<span class="c"># SYS IMPORTING</span>""")
+    yield assert_count(expected_expr, result, 1)
+
+    ## raw.txt
+
+    result = (app.outdir / 'raw.html').text(encoding='utf-8')
+
+    # raw block should be translated
+    expected_expr = """<iframe src="HTTP://SPHINX-DOC.ORG"></iframe></div>"""
+    yield assert_count(expected_expr, result, 1)
+
+    ## figure.txt
+
+    result = (app.outdir / 'figure.html').text(encoding='utf-8')
+
+    # alt and src for image block should be translated
+    expected_expr = """<img alt="I18N -&gt; IMG" src="_images/img.png" />"""
+    yield assert_count(expected_expr, result, 1)
+
+    # alt and src for figure block should be translated
+    expected_expr = """<img alt="IMG -&gt; I18N" src="_images/i18n.png" />"""
+    yield assert_count(expected_expr, result, 1)
+
+
+@gen_with_intl_app('text', freshenv=True)
+def test_references(app, status, warning):
+    app.builder.build_specific([app.srcdir / 'refs.txt'])
+
+    warnings = warning.getvalue().replace(os.sep, '/')
+    warning_expr = u'refs.txt:\\d+: ERROR: Unknown target name:'
+    yield assert_count(warning_expr, warnings, 0)

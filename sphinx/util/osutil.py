@@ -17,7 +17,6 @@ import time
 import errno
 import locale
 import shutil
-import gettext
 from os import path
 import contextlib
 
@@ -35,6 +34,7 @@ EINVAL = getattr(errno, 'EINVAL', 0)
 # in the future as to avoid the suspicion that a stray "/" in the code is a
 # hangover from more *nix-oriented origins.
 SEP = "/"
+
 
 def os_path(canonicalpath):
     return canonicalpath.replace(SEP, path.sep)
@@ -59,7 +59,7 @@ def relative_uri(base, to):
     if len(b2) == 1 and t2 == ['']:
         # Special case: relative_uri('f/index.html','f/') should
         # return './', not ''
-        return '.' +  SEP
+        return '.' + SEP
     return ('..' + SEP) * (len(b2)-1) + SEP.join(t2)
 
 
@@ -147,6 +147,7 @@ def copyfile(source, dest):
 
 no_fn_re = re.compile(r'[^a-zA-Z0-9_-]')
 
+
 def make_filename(string):
     return no_fn_re.sub('', string) or 'sphinx'
 
@@ -166,25 +167,6 @@ def safe_relpath(path, start=None):
         return os.path.relpath(path, start)
     except ValueError:
         return path
-
-def find_catalog(docname, compaction):
-    if compaction:
-        ret = docname.split(SEP, 1)[0]
-    else:
-        ret = docname
-
-    return ret
-
-
-def find_catalog_files(docname, srcdir, locale_dirs, lang, compaction):
-    if not(lang and locale_dirs):
-        return []
-
-    domain = find_catalog(docname, compaction)
-    files = [gettext.find(domain, path.join(srcdir, dir_), [lang])
-             for dir_ in locale_dirs]
-    files = [path.relpath(f, srcdir) for f in files if f]
-    return files
 
 
 fs_encoding = sys.getfilesystemencoding() or sys.getdefaultencoding()

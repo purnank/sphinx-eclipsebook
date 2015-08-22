@@ -40,7 +40,7 @@ from sphinx.util.console import brown
 # output but that may be customized by (re-)setting module attributes,
 # e.g. from conf.py.
 
-_mimetype_template = 'application/epub+zip' # no EOL!
+_mimetype_template = 'application/epub+zip'  # no EOL!
 
 _container_template = u'''\
 <?xml version="1.0" encoding="UTF-8"?>
@@ -243,7 +243,7 @@ class EpubBuilder(StandaloneHTMLBuilder):
         if isinstance(doctree, nodes.reference) and 'refuri' in doctree:
             refuri = doctree['refuri']
             if refuri.startswith('http://') or refuri.startswith('https://') \
-                or refuri.startswith('irc:') or refuri.startswith('mailto:'):
+               or refuri.startswith('irc:') or refuri.startswith('mailto:'):
                 return result
             classes = doctree.parent.attributes['classes']
             for level in range(8, 0, -1): # or range(1, 8)?
@@ -264,11 +264,12 @@ class EpubBuilder(StandaloneHTMLBuilder):
         and pre and post files not managed by sphinx.
         """
         doctree = self.env.get_and_resolve_doctree(self.config.master_doc,
-            self, prune_toctrees=False, includehidden=True)
+                                                   self, prune_toctrees=False,
+                                                   includehidden=True)
         self.refnodes = self.get_refnodes(doctree, [])
         master_dir = path.dirname(self.config.master_doc)
         if master_dir:
-            master_dir += '/' # XXX or os.sep?
+            master_dir += '/'  # XXX or os.sep?
             for item in self.refnodes:
                 item['refuri'] = master_dir + item['refuri']
         self.toc_add_files(self.refnodes)
@@ -280,7 +281,7 @@ class EpubBuilder(StandaloneHTMLBuilder):
             'level': 1,
             'refuri': self.esc(self.config.master_doc + '.html'),
             'text': ssp(self.esc(
-                    self.env.titles[self.config.master_doc].astext()))
+                self.env.titles[self.config.master_doc].astext()))
         })
         for file, text in reversed(self.config.epub_pre_files):
             refnodes.insert(0, {
@@ -414,7 +415,7 @@ class EpubBuilder(StandaloneHTMLBuilder):
                         m = self._refuri_re.match(link)
                         if m:
                             subentrylinks[i] = (ismain,
-                                self.fix_fragment(m.group(1), m.group(2)))
+                                                self.fix_fragment(m.group(1), m.group(2)))
 
     def is_vector_graphics(self, filename):
         """Does the filename extension indicate a vector graphic format?"""
@@ -483,8 +484,7 @@ class EpubBuilder(StandaloneHTMLBuilder):
         if pagename.startswith('genindex'):
             self.fix_genindex(addctx['genindexentries'])
         StandaloneHTMLBuilder.handle_page(self, pagename, addctx, templatename,
-            outfilename, event_arg)
-
+                                          outfilename, event_arg)
 
     # Finish by building the epub file
     def handle_finish(self):
@@ -552,9 +552,9 @@ class EpubBuilder(StandaloneHTMLBuilder):
         olen = len(outdir)
         projectfiles = []
         self.files = []
-        self.ignored_files = ['.buildinfo',
-            'mimetype', 'content.opf', 'toc.ncx', 'META-INF/container.xml',
-            self.config.epub_basename + '.epub'] + \
+        self.ignored_files = ['.buildinfo', 'mimetype', 'content.opf',
+                              'toc.ncx', 'META-INF/container.xml',
+                              self.config.epub_basename + '.epub'] + \
             self.config.epub_exclude_files
         for root, dirs, files in os.walk(outdir):
             for fn in files:
@@ -602,7 +602,7 @@ class EpubBuilder(StandaloneHTMLBuilder):
             image, html_tmpl = self.config.epub_cover
             image = image.replace(os.sep, '/')
             mpos = content_tmpl.rfind('</metadata>')
-            cpos = content_tmpl.rfind('\n', 0 , mpos) + 1
+            cpos = content_tmpl.rfind('\n', 0, mpos) + 1
             content_tmpl = content_tmpl[:cpos] + \
                 self._cover_template % {'cover': self.esc(self.make_id(image))} + \
                 content_tmpl[cpos:]
@@ -657,8 +657,8 @@ class EpubBuilder(StandaloneHTMLBuilder):
         # write the project file
         f = codecs.open(path.join(outdir, outname), 'w', 'utf-8')
         try:
-            f.write(content_tmpl % \
-                self.content_metadata(projectfiles, spine, guide))
+            f.write(content_tmpl %
+                    self.content_metadata(projectfiles, spine, guide))
         finally:
             f.close()
 
@@ -742,7 +742,8 @@ class EpubBuilder(StandaloneHTMLBuilder):
 
         if self.config.epub_tocscope == 'default':
             doctree = self.env.get_and_resolve_doctree(self.config.master_doc,
-                self, prune_toctrees=False, includehidden=False)
+                                                       self, prune_toctrees=False,
+                                                       includehidden=False)
             refnodes = self.get_refnodes(doctree, [])
             self.toc_add_files(refnodes)
         else:
@@ -766,10 +767,10 @@ class EpubBuilder(StandaloneHTMLBuilder):
         self.info('writing %s file...' % outname)
         projectfiles = ['META-INF/container.xml', 'content.opf', 'toc.ncx'] \
             + self.files
-        epub = zipfile.ZipFile(path.join(outdir, outname), 'w', \
-            zipfile.ZIP_DEFLATED)
-        epub.write(path.join(outdir, 'mimetype'), 'mimetype', \
-            zipfile.ZIP_STORED)
+        epub = zipfile.ZipFile(path.join(outdir, outname), 'w',
+                               zipfile.ZIP_DEFLATED)
+        epub.write(path.join(outdir, 'mimetype'), 'mimetype',
+                   zipfile.ZIP_STORED)
         for file in projectfiles:
             fp = path.join(outdir, file)
             epub.write(fp, file, zipfile.ZIP_DEFLATED)

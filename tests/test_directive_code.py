@@ -55,7 +55,7 @@ def test_code_block_caption_html(app, status, warning):
     html = (app.outdir / 'caption.html').text(encoding='utf-8')
     caption = (u'<div class="code-block-caption">'
                u'<span class="caption-text">caption <em>test</em> rb'
-               u'</span><a class="headerlink" href="#id1" '
+               u'</span><a class="headerlink" href="#caption-test-rb" '
                u'title="Permalink to this code">\xb6</a></div>')
     assert caption in html
 
@@ -63,7 +63,7 @@ def test_code_block_caption_html(app, status, warning):
 @with_app('latex', testroot='directive-code')
 def test_code_block_caption_latex(app, status, warning):
     app.builder.build_all()
-    latex = (app.outdir / 'Python.tex').text()
+    latex = (app.outdir / 'Python.tex').text(encoding='utf-8')
     caption = '\\caption{caption \\emph{test} rb}'
     assert caption in latex
 
@@ -101,7 +101,7 @@ def test_literal_include_dedent(app, status, warning):
 @with_app('html', testroot='directive-code')
 def test_literal_include_linenos(app, status, warning):
     app.builder.build(['linenos'])
-    html = (app.outdir / 'linenos.html').text()
+    html = (app.outdir / 'linenos.html').text(encoding='utf-8')
     linenos = (
         '<td class="linenos"><div class="linenodiv"><pre>'
         ' 1\n'
@@ -116,14 +116,15 @@ def test_literal_include_linenos(app, status, warning):
         '10\n'
         '11\n'
         '12\n'
-        '13</pre></div></td>')
+        '13\n'
+        '14</pre></div></td>')
     assert linenos in html
 
 
 @with_app('html', testroot='directive-code')
 def test_literal_include_lineno_start(app, status, warning):
     app.builder.build(['lineno_start'])
-    html = (app.outdir / 'lineno_start.html').text()
+    html = (app.outdir / 'lineno_start.html').text(encoding='utf-8')
     linenos = (
         '<td class="linenos"><div class="linenodiv"><pre>'
         '200\n'
@@ -138,14 +139,15 @@ def test_literal_include_lineno_start(app, status, warning):
         '209\n'
         '210\n'
         '211\n'
-        '212</pre></div></td>')
+        '212\n'
+        '213</pre></div></td>')
     assert linenos in html
 
 
 @with_app('html', testroot='directive-code')
 def test_literal_include_lineno_match(app, status, warning):
     app.builder.build(['lineno_match'])
-    html = (app.outdir / 'lineno_match.html').text()
+    html = (app.outdir / 'lineno_match.html').text(encoding='utf-8')
     pyobject = (
         '<td class="linenos"><div class="linenodiv"><pre>'
         ' 9\n'
@@ -156,6 +158,7 @@ def test_literal_include_lineno_match(app, status, warning):
 
     lines = (
         '<td class="linenos"><div class="linenodiv"><pre>'
+        '5\n'
         '6\n'
         '7\n'
         '8\n'
@@ -164,12 +167,27 @@ def test_literal_include_lineno_match(app, status, warning):
 
     start_after = (
         '<td class="linenos"><div class="linenodiv"><pre>'
+        ' 8\n'
         ' 9\n'
         '10\n'
         '11\n'
         '12\n'
-        '13</pre></div></td>')
+        '13\n'
+        '14</pre></div></td>')
     assert start_after in html
+
+
+@with_app('latex', testroot='directive-code')
+def test_literalinclude_file_whole_of_emptyline(app, status, warning):
+    app.builder.build_all()
+    latex = (app.outdir / 'Python.tex').text(encoding='utf-8').replace('\r\n', '\n')
+    includes = (
+        '\\begin{Verbatim}[commandchars=\\\\\\{\\},numbers=left,firstnumber=1,stepnumber=1]\n'
+        '\n'
+        '\n'
+        '\n'
+        '\\end{Verbatim}\n')
+    assert includes in latex
 
 
 @with_app('html', testroot='directive-code')
@@ -178,7 +196,7 @@ def test_literalinclude_caption_html(app, status, warning):
     html = (app.outdir / 'caption.html').text(encoding='utf-8')
     caption = (u'<div class="code-block-caption">'
                u'<span class="caption-text">caption <strong>test</strong> py'
-               u'</span><a class="headerlink" href="#id2" '
+               u'</span><a class="headerlink" href="#caption-test-py" '
                u'title="Permalink to this code">\xb6</a></div>')
     assert caption in html
 
@@ -186,6 +204,6 @@ def test_literalinclude_caption_html(app, status, warning):
 @with_app('latex', testroot='directive-code')
 def test_literalinclude_caption_latex(app, status, warning):
     app.builder.build('index')
-    latex = (app.outdir / 'Python.tex').text()
+    latex = (app.outdir / 'Python.tex').text(encoding='utf-8')
     caption = '\\caption{caption \\textbf{test} py}'
     assert caption in latex

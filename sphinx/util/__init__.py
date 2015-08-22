@@ -29,17 +29,19 @@ from docutils.utils import relative_path
 import jinja2
 
 import sphinx
-from sphinx.errors import PycodeError, SphinxParallelError
+from sphinx.errors import PycodeError, SphinxParallelError, ExtensionError
 from sphinx.util.console import strip_colors
 from sphinx.util.osutil import fs_encoding
 
 # import other utilities; partly for backwards compatibility, so don't
 # prune unused ones indiscriminately
-from sphinx.util.osutil import SEP, os_path, relative_uri, ensuredir, walk, \
-    mtimes_of_files, movefile, copyfile, copytimes, make_filename, ustrftime
-from sphinx.util.nodes import nested_parse_with_titles, split_explicit_title, \
-    explicit_title_re, caption_ref_re
-from sphinx.util.matching import patfilter
+from sphinx.util.osutil import (  # noqa
+    SEP, os_path, relative_uri, ensuredir, walk, mtimes_of_files, movefile,
+    copyfile, copytimes, make_filename, ustrftime)
+from sphinx.util.nodes import (   # noqa
+    nested_parse_with_titles, split_explicit_title, explicit_title_re,
+    caption_ref_re)
+from sphinx.util.matching import patfilter  # noqa
 
 # Generally useful regular expressions.
 ws_re = re.compile(r'\s+')
@@ -87,17 +89,18 @@ def get_matching_files(dirname, exclude_matchers=()):
             yield filename
 
 
-def get_matching_docs(dirname, suffix, exclude_matchers=()):
-    """Get all file names (without suffix) matching a suffix in a directory,
+def get_matching_docs(dirname, suffixes, exclude_matchers=()):
+    """Get all file names (without suffixes) matching a suffix in a directory,
     recursively.
 
     Exclude files and dirs matching a pattern in *exclude_patterns*.
     """
-    suffixpattern = '*' + suffix
+    suffixpatterns = ['*' + s for s in suffixes]
     for filename in get_matching_files(dirname, exclude_matchers):
-        if not fnmatch.fnmatch(filename, suffixpattern):
-            continue
-        yield filename[:-len(suffix)]
+        for suffixpattern in suffixpatterns:
+            if fnmatch.fnmatch(filename, suffixpattern):
+                yield filename[:-len(suffixpattern)+1]
+                break
 
 
 class FilenameUniqDict(dict):
@@ -180,13 +183,14 @@ def copy_static_entry(source, targetdir, builder, context={},
 
 _DEBUG_HEADER = '''\
 # Sphinx version: %s
-# Python version: %s
+# Python version: %s (%s)
 # Docutils version: %s %s
 # Jinja2 version: %s
 # Last messages:
 %s
 # Loaded extensions:
 '''
+
 
 def save_traceback(app):
     """Save the current exception's traceback in a temporary file."""
@@ -203,8 +207,9 @@ def save_traceback(app):
             '#   %s' % strip_colors(force_decode(s, 'utf-8')).strip()
             for s in app.messagelog)
     os.write(fd, (_DEBUG_HEADER %
-                  (sphinx.__version__,
+                  (sphinx.__display_version__,
                    platform.python_version(),
+                   platform.python_implementation(),
                    docutils.__version__, docutils.__version_details__,
                    jinja2.__version__,
                    last_msgs)).encode('utf-8'))
@@ -276,6 +281,7 @@ def get_full_modname(modname, attribute):
 
 # a regex to recognize coding cookies
 _coding_re = re.compile(r'coding[:=]\s*([-\w.]+)')
+
 
 def detect_encoding(readline):
     """Like tokenize.detect_encoding() from Py3k, but a bit simplified."""
@@ -388,8 +394,10 @@ def force_decode(string, encoding):
 class attrdict(dict):
     def __getattr__(self, key):
         return self[key]
+
     def __setattr__(self, key, val):
         self[key] = val
+
     def __delattr__(self, key):
         del self[key]
 
@@ -436,7 +444,7 @@ def split_index_msg(type, value):
 def format_exception_cut_frames(x=1):
     """Format an exception with traceback, but only the last x frames."""
     typ, val, tb = sys.exc_info()
-    #res = ['Traceback (most recent call last):\n']
+    # res = ['Traceback (most recent call last):\n']
     res = []
     tbres = traceback.format_tb(tb)
     res += tbres[-x:]
@@ -485,6 +493,10 @@ def get_figtype(node):
     from docutils import nodes
     if isinstance(node, nodes.figure):
         return 'figure'
+    elif isinstance(node, nodes.image) and isinstance(node.parent, nodes.figure):
+        # bare image node is not supported because it doesn't have caption and
+        # no-caption-target isn't a numbered figure.
+        return 'figure'
     elif isinstance(node, nodes.table):
         return 'table'
     elif isinstance(node, nodes.container):
@@ -492,3 +504,22 @@ def get_figtype(node):
             return 'code-block'
 
     return None
+
+
+def import_object(objname, source=None):
+    try:
+        module, name = objname.rsplit('.', 1)
+    except ValueError as err:
+        raise ExtensionError('Invalid full object name %s' % objname +
+                             (source and ' (needed for %s)' % source or ''),
+                             err)
+    try:
+        return getattr(__import__(module, None, None, [name]), name)
+    except ImportError as err:
+        raise ExtensionError('Could not import %s' % module +
+                             (source and ' (needed for %s)' % source or ''),
+                             err)
+    except AttributeError as err:
+        raise ExtensionError('Could not find %s' % objname +
+                             (source and ' (needed for %s)' % source or ''),
+                             err)

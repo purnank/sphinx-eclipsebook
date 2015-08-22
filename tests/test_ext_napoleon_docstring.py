@@ -326,6 +326,310 @@ Attributes:
 """
         self.assertEqual(expected, actual)
 
+    def test_code_block_in_returns_section(self):
+        docstring = """
+Returns:
+    foobar: foo::
+
+        codecode
+        codecode
+"""
+        expected = """
+:returns: foo::
+
+              codecode
+              codecode
+:rtype: foobar
+"""
+        actual = str(GoogleDocstring(docstring))
+        self.assertEqual(expected, actual)
+
+    def test_colon_in_return_type(self):
+        docstring = """Example property.
+
+Returns:
+    :py:class:`~.module.submodule.SomeClass`: an example instance
+    if available, None if not available.
+"""
+        expected = """Example property.
+
+:returns: an example instance
+          if available, None if not available.
+:rtype: :py:class:`~.module.submodule.SomeClass`
+"""
+        actual = str(GoogleDocstring(docstring))
+        self.assertEqual(expected, actual)
+
+    def test_xrefs_in_return_type(self):
+        docstring = """Example Function
+
+Returns:
+    :class:`numpy.ndarray`: A :math:`n \\times 2` array containing
+    a bunch of math items
+"""
+        expected = """Example Function
+
+:returns: A :math:`n \\times 2` array containing
+          a bunch of math items
+:rtype: :class:`numpy.ndarray`
+"""
+        actual = str(GoogleDocstring(docstring))
+        self.assertEqual(expected, actual)
+
+    def test_raises_types(self):
+        docstrings = [("""
+Example Function
+
+Raises:
+    RuntimeError:
+        A setting wasn't specified, or was invalid.
+    ValueError:
+        Something something value error.
+
+""", """
+Example Function
+
+:raises: * :exc:`RuntimeError`
+
+           A setting wasn't specified, or was invalid.
+         * :exc:`ValueError`
+
+           Something something value error.
+"""),
+                      ################################
+                      ("""
+Example Function
+
+Raises:
+    InvalidDimensionsError
+
+""", """
+Example Function
+
+:raises: :exc:`InvalidDimensionsError`
+"""),
+                      ################################
+                      ("""
+Example Function
+
+Raises:
+    Invalid Dimensions Error
+
+""", """
+Example Function
+
+:raises: Invalid Dimensions Error
+"""),
+                      ################################
+                      ("""
+Example Function
+
+Raises:
+    Invalid Dimensions Error: With description
+
+""", """
+Example Function
+
+:raises: *Invalid Dimensions Error* --
+         With description
+"""),
+                      ################################
+                      ("""
+Example Function
+
+Raises:
+    InvalidDimensionsError: If the dimensions couldn't be parsed.
+
+""", """
+Example Function
+
+:raises: :exc:`InvalidDimensionsError` --
+         If the dimensions couldn't be parsed.
+"""),
+                      ################################
+                      ("""
+Example Function
+
+Raises:
+    Invalid Dimensions Error: If the dimensions couldn't be parsed.
+
+""", """
+Example Function
+
+:raises: *Invalid Dimensions Error* --
+         If the dimensions couldn't be parsed.
+"""),
+                      ################################
+                      ("""
+Example Function
+
+Raises:
+    If the dimensions couldn't be parsed.
+
+""", """
+Example Function
+
+:raises: If the dimensions couldn't be parsed.
+"""),
+                      ################################
+                      ("""
+Example Function
+
+Raises:
+    :class:`exc.InvalidDimensionsError`
+
+""", """
+Example Function
+
+:raises: :class:`exc.InvalidDimensionsError`
+"""),
+                      ################################
+                      ("""
+Example Function
+
+Raises:
+    :class:`exc.InvalidDimensionsError`: If the dimensions couldn't be parsed.
+
+""", """
+Example Function
+
+:raises: :class:`exc.InvalidDimensionsError` --
+         If the dimensions couldn't be parsed.
+"""),
+                      ################################
+                      ("""
+Example Function
+
+Raises:
+    :class:`exc.InvalidDimensionsError`: If the dimensions couldn't be parsed,
+       then a :class:`exc.InvalidDimensionsError` will be raised.
+
+""", """
+Example Function
+
+:raises: :class:`exc.InvalidDimensionsError` --
+         If the dimensions couldn't be parsed,
+         then a :class:`exc.InvalidDimensionsError` will be raised.
+"""),
+                      ################################
+                      ("""
+Example Function
+
+Raises:
+    :class:`exc.InvalidDimensionsError`: If the dimensions couldn't be parsed.
+    :class:`exc.InvalidArgumentsError`: If the arguments are invalid.
+
+""", """
+Example Function
+
+:raises: * :class:`exc.InvalidDimensionsError` --
+           If the dimensions couldn't be parsed.
+         * :class:`exc.InvalidArgumentsError` --
+           If the arguments are invalid.
+"""),
+                      ################################
+                      ("""
+Example Function
+
+Raises:
+    :class:`exc.InvalidDimensionsError`
+    :class:`exc.InvalidArgumentsError`
+
+""", """
+Example Function
+
+:raises: * :class:`exc.InvalidDimensionsError`
+         * :class:`exc.InvalidArgumentsError`
+""")]
+        for docstring, expected in docstrings:
+            actual = str(GoogleDocstring(docstring))
+            self.assertEqual(expected, actual)
+
+    def test_kwargs_in_arguments(self):
+        docstring = """Allows to create attributes binded to this device.
+
+Some other paragraph.
+
+Code sample for usage::
+
+  dev.bind(loopback=Loopback)
+  dev.loopback.configure()
+
+Arguments:
+  **kwargs: name/class pairs that will create resource-managers
+    bound as instance attributes to this instance. See code
+    example above.
+"""
+        expected = """Allows to create attributes binded to this device.
+
+Some other paragraph.
+
+Code sample for usage::
+
+  dev.bind(loopback=Loopback)
+  dev.loopback.configure()
+
+:param \\*\\*kwargs: name/class pairs that will create resource-managers
+                   bound as instance attributes to this instance. See code
+                   example above.
+"""
+        actual = str(GoogleDocstring(docstring))
+        self.assertEqual(expected, actual)
+
+    def test_section_header_formatting(self):
+        docstrings = [("""
+Summary line
+
+Example:
+    Multiline reStructuredText
+    literal code block
+
+""", """
+Summary line
+
+.. rubric:: Example
+
+Multiline reStructuredText
+literal code block
+"""),
+                      ################################
+                      ("""
+Summary line
+
+Example::
+
+    Multiline reStructuredText
+    literal code block
+
+""", """
+Summary line
+
+Example::
+
+    Multiline reStructuredText
+    literal code block
+"""),
+                      ################################
+                      ("""
+Summary line
+
+:Example:
+
+    Multiline reStructuredText
+    literal code block
+
+""", """
+Summary line
+
+:Example:
+
+    Multiline reStructuredText
+    literal code block
+""")]
+        for docstring, expected in docstrings:
+            actual = str(GoogleDocstring(docstring))
+            self.assertEqual(expected, actual)
+
 
 class NumpyDocstringTest(BaseDocstringTest):
     docstrings = [(
@@ -483,7 +787,7 @@ class NumpyDocstringTest(BaseDocstringTest):
         :Yields: *str* --
                  Extended
                  description of yielded value"""
-     )]
+    )]
 
     def test_docstrings(self):
         config = Config(napoleon_use_param=False, napoleon_use_rtype=False)
@@ -588,3 +892,332 @@ numpy.multivariate_normal(mean, cov, shape=None, spam=None)
        relationship
 """
         self.assertEqual(expected, actual)
+
+    def test_colon_in_return_type(self):
+        docstring = """
+Summary
+
+Returns
+-------
+:py:class:`~my_mod.my_class`
+    an instance of :py:class:`~my_mod.my_class`
+"""
+
+        expected = """
+Summary
+
+:returns: an instance of :py:class:`~my_mod.my_class`
+:rtype: :py:class:`~my_mod.my_class`
+"""
+
+        config = Config()
+        app = mock.Mock()
+        actual = str(NumpyDocstring(docstring, config, app, "method"))
+
+        self.assertEqual(expected, actual)
+
+    def test_underscore_in_attribute(self):
+        docstring = """
+Attributes
+----------
+
+arg_ : type
+    some description
+"""
+
+        expected = """
+:ivar arg_: some description
+:vartype arg_: type
+"""
+
+        config = Config(napoleon_use_ivar=True)
+        app = mock.Mock()
+        actual = str(NumpyDocstring(docstring, config, app, "class"))
+
+        self.assertEqual(expected, actual)
+
+    def test_raises_types(self):
+        docstrings = [("""
+Example Function
+
+Raises
+------
+  RuntimeError
+
+      A setting wasn't specified, or was invalid.
+  ValueError
+
+      Something something value error.
+
+""", """
+Example Function
+
+:raises: * :exc:`RuntimeError`
+
+           A setting wasn't specified, or was invalid.
+         * :exc:`ValueError`
+
+           Something something value error.
+"""),
+                      ################################
+                      ("""
+Example Function
+
+Raises
+------
+InvalidDimensionsError
+
+""", """
+Example Function
+
+:raises: :exc:`InvalidDimensionsError`
+"""),
+                      ################################
+                      ("""
+Example Function
+
+Raises
+------
+Invalid Dimensions Error
+
+""", """
+Example Function
+
+:raises: Invalid Dimensions Error
+"""),
+                      ################################
+                      ("""
+Example Function
+
+Raises
+------
+Invalid Dimensions Error
+    With description
+
+""", """
+Example Function
+
+:raises: *Invalid Dimensions Error* --
+         With description
+"""),
+                      ################################
+                      ("""
+Example Function
+
+Raises
+------
+InvalidDimensionsError
+    If the dimensions couldn't be parsed.
+
+""", """
+Example Function
+
+:raises: :exc:`InvalidDimensionsError` --
+         If the dimensions couldn't be parsed.
+"""),
+                      ################################
+                      ("""
+Example Function
+
+Raises
+------
+Invalid Dimensions Error
+    If the dimensions couldn't be parsed.
+
+""", """
+Example Function
+
+:raises: *Invalid Dimensions Error* --
+         If the dimensions couldn't be parsed.
+"""),
+                      ################################
+                      ("""
+Example Function
+
+Raises
+------
+If the dimensions couldn't be parsed.
+
+""", """
+Example Function
+
+:raises: If the dimensions couldn't be parsed.
+"""),
+                      ################################
+                      ("""
+Example Function
+
+Raises
+------
+:class:`exc.InvalidDimensionsError`
+
+""", """
+Example Function
+
+:raises: :class:`exc.InvalidDimensionsError`
+"""),
+                      ################################
+                      ("""
+Example Function
+
+Raises
+------
+:class:`exc.InvalidDimensionsError`
+    If the dimensions couldn't be parsed.
+
+""", """
+Example Function
+
+:raises: :class:`exc.InvalidDimensionsError` --
+         If the dimensions couldn't be parsed.
+"""),
+                      ################################
+                      ("""
+Example Function
+
+Raises
+------
+:class:`exc.InvalidDimensionsError`
+    If the dimensions couldn't be parsed,
+    then a :class:`exc.InvalidDimensionsError` will be raised.
+
+""", """
+Example Function
+
+:raises: :class:`exc.InvalidDimensionsError` --
+         If the dimensions couldn't be parsed,
+         then a :class:`exc.InvalidDimensionsError` will be raised.
+"""),
+                      ################################
+                      ("""
+Example Function
+
+Raises
+------
+:class:`exc.InvalidDimensionsError`
+    If the dimensions couldn't be parsed.
+:class:`exc.InvalidArgumentsError`
+    If the arguments are invalid.
+
+""", """
+Example Function
+
+:raises: * :class:`exc.InvalidDimensionsError` --
+           If the dimensions couldn't be parsed.
+         * :class:`exc.InvalidArgumentsError` --
+           If the arguments are invalid.
+"""),
+                      ################################
+                      ("""
+Example Function
+
+Raises
+------
+:class:`exc.InvalidDimensionsError`
+:class:`exc.InvalidArgumentsError`
+
+""", """
+Example Function
+
+:raises: * :class:`exc.InvalidDimensionsError`
+         * :class:`exc.InvalidArgumentsError`
+""")]
+        for docstring, expected in docstrings:
+            config = Config()
+            app = mock.Mock()
+            actual = str(NumpyDocstring(docstring, config, app, "method"))
+            self.assertEqual(expected, actual)
+
+    def test_xrefs_in_return_type(self):
+        docstring = """
+Example Function
+
+Returns
+-------
+:class:`numpy.ndarray`
+    A :math:`n \\times 2` array containing
+    a bunch of math items
+"""
+        expected = """
+Example Function
+
+:returns: A :math:`n \\times 2` array containing
+          a bunch of math items
+:rtype: :class:`numpy.ndarray`
+"""
+        config = Config()
+        app = mock.Mock()
+        actual = str(NumpyDocstring(docstring, config, app, "method"))
+        self.assertEqual(expected, actual)
+
+    def test_section_header_underline_length(self):
+        docstrings = [("""
+Summary line
+
+Example
+-
+Multiline example
+body
+
+""", """
+Summary line
+
+Example
+-
+Multiline example
+body
+"""),
+                      ################################
+                      ("""
+Summary line
+
+Example
+--
+Multiline example
+body
+
+""", """
+Summary line
+
+.. rubric:: Example
+
+Multiline example
+body
+"""),
+                      ################################
+                      ("""
+Summary line
+
+Example
+-------
+Multiline example
+body
+
+""", """
+Summary line
+
+.. rubric:: Example
+
+Multiline example
+body
+"""),
+                      ################################
+                      ("""
+Summary line
+
+Example
+------------
+Multiline example
+body
+
+""", """
+Summary line
+
+.. rubric:: Example
+
+Multiline example
+body
+""")]
+        for docstring, expected in docstrings:
+            actual = str(NumpyDocstring(docstring))
+            self.assertEqual(expected, actual)

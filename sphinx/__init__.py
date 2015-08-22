@@ -15,27 +15,31 @@
 import sys
 from os import path
 
-__version__  = '1.3b3'
-__released__ = '1.3b3'  # used when Sphinx builds its own docs
+__version__  = '1.3.1+'
+__released__ = '1.3.1+'  # used when Sphinx builds its own docs
+
 # version info for better programmatic use
 # possible values for 3rd element: 'alpha', 'beta', 'rc', 'final'
 # 'final' has 0 as the last element
-version_info = (1, 3, 0, 'beta', 3)
+version_info = (1, 3, 1, 'beta', 1)
 
 package_dir = path.abspath(path.dirname(__file__))
 
-if '+' in __version__ or 'pre' in __version__:
+__display_version__ = __version__  # used for command line version
+if __version__.endswith('+'):
     # try to find out the changeset hash if checked out from hg, and append
     # it to __version__ (since we use this value from setup.py, it gets
     # automatically propagated to an installed copy as well)
+    __display_version__ = __version__
+    __version__ = __version__[:-1]  # remove '+' for PEP-440 version spec.
     try:
         import subprocess
-        p = subprocess.Popen(['hg', 'id', '-i', '-R',
+        p = subprocess.Popen(['git', 'show', '-s', '--pretty=format:%h',
                               path.join(package_dir, '..')],
                              stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         out, err = p.communicate()
         if out:
-            __version__ += '/' + out.strip()
+            __display_version__ += '/' + out.decode().strip()
     except Exception:
         pass
 
@@ -51,7 +55,7 @@ def build_main(argv=sys.argv):
     """Sphinx build "main" command-line entry."""
     if (sys.version_info[:3] < (2, 6, 0) or
        (3, 0, 0) <= sys.version_info[:3] < (3, 3, 0)):
-        sys.stderr.write('Error: Sphinx requires at least Python 2.6 to run.\n')
+        sys.stderr.write('Error: Sphinx requires at least Python 2.6 or 3.3 to run.\n')
         return 1
     try:
         from sphinx import cmdline

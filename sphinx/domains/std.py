@@ -14,6 +14,7 @@ import unicodedata
 
 from six import iteritems
 from docutils import nodes
+from docutils.nodes import fully_normalize_name
 from docutils.parsers.rst import directives
 from docutils.statemachine import ViewList
 
@@ -210,7 +211,7 @@ class Program(Directive):
 class OptionXRefRole(XRefRole):
     def process_link(self, env, refnode, has_explicit_title, title, target):
         # validate content
-        if not re.match('(.+ )?[-/+]', target):
+        if not re.match(r'(.+ )?[-/+\w]', target):
             env.warn_node('Malformed :option: %r, does not contain option '
                           'marker - or -- or / or +' % target, refnode)
         refnode['std:program'] = env.ref_context.get('std:program')
@@ -223,7 +224,7 @@ def make_termnodes_from_paragraph_node(env, node, new_id=None):
 
     termtext = node.astext()
     if new_id is None:
-        new_id = 'term-' + nodes.make_id(termtext)
+        new_id = nodes.make_id('term-' + termtext)
     if new_id in gloss_entries:
         new_id = 'term-' + str(len(gloss_entries))
     gloss_entries.add(new_id)
@@ -461,10 +462,10 @@ class StandardDomain(Domain):
         # links to tokens in grammar productions
         'token':   XRefRole(),
         # links to terms in glossary
-        'term':    XRefRole(lowercase=True, innernodeclass=nodes.emphasis,
+        'term':    XRefRole(lowercase=True, innernodeclass=nodes.inline,
                             warn_dangling=True),
         # links to headings or arbitrary labels
-        'ref':     XRefRole(lowercase=True, innernodeclass=nodes.emphasis,
+        'ref':     XRefRole(lowercase=True, innernodeclass=nodes.inline,
                             warn_dangling=True),
         # links to labels of numbered figures, tables and code-blocks
         'numref':  XRefRole(lowercase=True,
@@ -497,16 +498,16 @@ class StandardDomain(Domain):
     }
 
     def clear_doc(self, docname):
-        for key, (fn, _) in list(self.data['progoptions'].items()):
+        for key, (fn, _l) in list(self.data['progoptions'].items()):
             if fn == docname:
                 del self.data['progoptions'][key]
-        for key, (fn, _) in list(self.data['objects'].items()):
+        for key, (fn, _l) in list(self.data['objects'].items()):
             if fn == docname:
                 del self.data['objects'][key]
-        for key, (fn, _, _) in list(self.data['labels'].items()):
+        for key, (fn, _l, _l) in list(self.data['labels'].items()):
             if fn == docname:
                 del self.data['labels'][key]
-        for key, (fn, _) in list(self.data['anonlabels'].items()):
+        for key, (fn, _l) in list(self.data['anonlabels'].items()):
             if fn == docname:
                 del self.data['anonlabels'][key]
 
@@ -573,6 +574,12 @@ class StandardDomain(Domain):
                         break
                 else:
                     continue
+            elif node.traverse(addnodes.toctree):
+                n = node.traverse(addnodes.toctree)[0]
+                if n.get('caption'):
+                    sectname = n['caption']
+                else:
+                    continue
             else:
                 # anonymous-only labels
                 continue
@@ -583,7 +590,7 @@ class StandardDomain(Domain):
                              **options):
         nodeclass = options.pop('nodeclass', nodes.reference)
         newnode = nodeclass('', '', internal=True, **options)
-        innernode = nodes.emphasis(sectname, sectname)
+        innernode = nodes.inline(sectname, sectname)
         if docname == fromdocname:
             newnode['refid'] = labelid
         else:
@@ -636,13 +643,10 @@ class StandardDomain(Domain):
                 return None
 
             title = contnode.astext()
-            if target == title:
-                prefix = env.config.numfig_format.get(figtype, '')
-                title = prefix.replace('%s', '#')
-                newtitle = prefix % '.'.join(map(str, fignumber))
-            else:
-                newtitle = title.replace('#', '.'.join(map(str, fignumber)))
+            if target == fully_normalize_name(title):
+                title = env.config.numfig_format.get(figtype, '')
 
+            newtitle = title % '.'.join(map(str, fignumber))
             return self.build_reference_node(fromdocname, builder,
                                              docname, labelid, newtitle,
                                              nodeclass=addnodes.number_reference,
@@ -659,12 +663,14 @@ class StandardDomain(Domain):
             # most obvious thing: we are a flag option without program
             if target.startswith(('-', '/', '+')):
                 progname = node.get('std:program')
-            else:
+            elif re.search(r'[-/+]', target):
                 try:
                     progname, target = re.split(r' (?=-|--|/|\+)', target, 1)
                 except ValueError:
                     return None
                 progname = ws_re.sub('-', progname.strip())
+            else:
+                progname = None
             docname, labelid = self.data['progoptions'].get((progname, target),
                                                             ('', ''))
             if not docname:

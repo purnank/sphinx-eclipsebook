@@ -23,8 +23,10 @@ from sphinx.util.pycompat import UnicodeMixin
 
 
 _directive_regex = re.compile(r'\.\. \S+::')
-_google_untyped_arg_regex = re.compile(r'\s*(.+?)\s*:\s*(.*)')
-_google_typed_arg_regex = re.compile(r'\s*(.+?)\s*\(\s*(.+?)\s*\)\s*:\s*(.*)')
+_google_section_regex = re.compile(r'^(\s|\w)+:\s*$')
+_google_typed_arg_regex = re.compile(r'\s*(.+?)\s*\(\s*(.+?)\s*\)')
+_numpy_section_regex = re.compile(r'^[=\-`:\'"~^_*+#<>]{2,}\s*$')
+_xref_regex = re.compile(r'(:\w+:\S+:`.+?`|:\S+:`.+?`|`.+?`)')
 
 
 class GoogleDocstring(UnicodeMixin):
@@ -202,20 +204,14 @@ class GoogleDocstring(UnicodeMixin):
     def _consume_field(self, parse_type=True, prefer_type=False):
         line = next(self._line_iter)
 
-        match = None
-        _name, _type, _desc = line.strip(), '', ''
+        before, colon, after = self._partition_field_on_colon(line)
+        _name, _type, _desc = before, '', after
+
         if parse_type:
-            match = _google_typed_arg_regex.match(line)
+            match = _google_typed_arg_regex.match(before)
             if match:
                 _name = match.group(1)
                 _type = match.group(2)
-                _desc = match.group(3)
-
-        if not match:
-            match = _google_untyped_arg_regex.match(line)
-            if match:
-                _name = match.group(1)
-                _desc = match.group(2)
 
         if _name[:2] == '**':
             _name = r'\*\*'+_name[2:]
@@ -241,20 +237,21 @@ class GoogleDocstring(UnicodeMixin):
     def _consume_returns_section(self):
         lines = self._dedent(self._consume_to_next_section())
         if lines:
+            before, colon, after = self._partition_field_on_colon(lines[0])
             _name, _type, _desc = '', '', lines
-            match = _google_typed_arg_regex.match(lines[0])
-            if match:
-                _name = match.group(1)
-                _type = match.group(2)
-                _desc = match.group(3)
-            else:
-                match = _google_untyped_arg_regex.match(lines[0])
+
+            if colon:
+                if after:
+                    _desc = [after] + lines[1:]
+                else:
+                    _desc = lines[1:]
+
+                match = _google_typed_arg_regex.match(before)
                 if match:
-                    _type = match.group(1)
-                    _desc = match.group(2)
-            if match:
-                lines[0] = _desc
-                _desc = lines
+                    _name = match.group(1)
+                    _type = match.group(2)
+                else:
+                    _type = before
 
             _desc = self.__class__(_desc, self._config).lines()
             return [(_name, _type, _desc,)]
@@ -386,7 +383,8 @@ class GoogleDocstring(UnicodeMixin):
 
     def _is_section_header(self):
         section = self._line_iter.peek().lower()
-        if section.strip(':') in self._sections:
+        match = _google_section_regex.match(section)
+        if match and section.strip(':') in self._sections:
             header_indent = self._get_indent(section)
             section_indent = self._get_current_indent(peek_ahead=1)
             return section_indent > header_indent
@@ -511,33 +509,31 @@ class GoogleDocstring(UnicodeMixin):
             return self._format_fields('Parameters', fields)
 
     def _parse_raises_section(self, section):
-        fields = self._consume_fields()
+        fields = self._consume_fields(parse_type=False, prefer_type=True)
         field_type = ':raises:'
         padding = ' ' * len(field_type)
         multi = len(fields) > 1
         lines = []
-        for _name, _type, _desc in fields:
-            sep = _desc and ' -- ' or ''
-            if _name:
-                if ' ' in _name:
-                    _name = '**%s**' % _name
+        for _, _type, _desc in fields:
+            has_desc = any(_desc)
+            sep = (_desc and _desc[0]) and ' -- ' or ''
+            if _type:
+                has_refs = '`' in _type or ':' in _type
+                has_space = any(c in ' \t\n\v\f ' for c in _type)
+
+                if not has_refs and not has_space:
+                    _type = ':exc:`%s`%s' % (_type, sep)
+                elif has_desc and has_space:
+                    _type = '*%s*%s' % (_type, sep)
                 else:
-                    _name = ':exc:`%s`' % _name
-                if _type:
-                    if '`' in _type:
-                        field = ['%s (%s)%s' % (_name, _type, sep)]
-                    else:
-                        field = ['%s (*%s*)%s' % (_name, _type, sep)]
+                    _type = '%s%s' % (_type, sep)
+
+                if has_desc:
+                    field = [_type] + _desc
                 else:
-                    field = ['%s%s' % (_name, sep)]
-            elif _type:
-                if '`' in _type:
-                    field = ['%s%s' % (_type, sep)]
-                else:
-                    field = ['*%s*%s' % (_type, sep)]
+                    field = [_type]
             else:
-                field = []
-            field = field + _desc
+                field = _desc
             if multi:
                 if lines:
                     lines.extend(self._format_block(padding + ' * ', field))
@@ -545,6 +541,8 @@ class GoogleDocstring(UnicodeMixin):
                     lines.extend(self._format_block(field_type + ' * ', field))
             else:
                 lines.extend(self._format_block(field_type + ' ', field))
+        if lines and lines[-1]:
+            lines.append('')
         return lines
 
     def _parse_references_section(self, section):
@@ -592,6 +590,27 @@ class GoogleDocstring(UnicodeMixin):
     def _parse_yields_section(self, section):
         fields = self._consume_returns_section()
         return self._format_fields('Yields', fields)
+
+    def _partition_field_on_colon(self, line):
+        before_colon = []
+        after_colon = []
+        colon = ''
+        found_colon = False
+        for i, source in enumerate(_xref_regex.split(line)):
+            if found_colon:
+                after_colon.append(source)
+            else:
+                if (i % 2) == 0 and ":" in source:
+                    found_colon = True
+                    before, colon, after = source.partition(":")
+                    before_colon.append(before)
+                    after_colon.append(after)
+                else:
+                    before_colon.append(source)
+
+        return ("".join(before_colon).strip(),
+                colon,
+                "".join(after_colon).strip())
 
     def _strip_empty(self, lines):
         if lines:
@@ -719,7 +738,7 @@ class NumpyDocstring(GoogleDocstring):
     def _consume_field(self, parse_type=True, prefer_type=False):
         line = next(self._line_iter)
         if parse_type:
-            _name, _, _type = line.partition(':')
+            _name, _, _type = self._partition_field_on_colon(line)
         else:
             _name, _type = line, ''
         _name, _type = _name.strip(), _type.strip()
@@ -753,8 +772,7 @@ class NumpyDocstring(GoogleDocstring):
         section, underline = self._line_iter.peek(2)
         section = section.lower()
         if section in self._sections and isinstance(underline, string_types):
-            pattern = r'[=\-`:\'"~^_*+#<>]{' + str(len(section)) + r'}$'
-            return bool(re.match(pattern, underline))
+            return bool(_numpy_section_regex.match(underline))
         elif self._directive_sections:
             if _directive_regex.match(section):
                 for directive_section in self._directive_sections:

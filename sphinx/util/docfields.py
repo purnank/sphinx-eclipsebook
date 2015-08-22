@@ -53,8 +53,8 @@ class Field(object):
         self.rolename = rolename
         self.bodyrolename = bodyrolename
 
-    def make_xref(self, rolename, domain, target, innernode=nodes.emphasis,
-                  contnode=None):
+    def make_xref(self, rolename, domain, target,
+                  innernode=addnodes.literal_emphasis, contnode=None):
         if not rolename:
             return contnode or innernode(target, target)
         refnode = addnodes.pending_xref('', refdomain=domain, refexplicit=False,
@@ -74,8 +74,8 @@ class Field(object):
                                         fieldarg, nodes.Text)
         if len(content) == 1 and (
                 isinstance(content[0], nodes.Text) or
-                (isinstance(content[0], nodes.inline) and len(content[0]) == 1
-                 and isinstance(content[0][0], nodes.Text))):
+                (isinstance(content[0], nodes.inline) and len(content[0]) == 1 and
+                 isinstance(content[0][0], nodes.Text))):
             content = [self.make_xref(self.bodyrolename, domain,
                                       content[0].astext(), contnode=content[0])]
         fieldbody = nodes.field_body('', nodes.paragraph('', '', *content))
@@ -159,7 +159,8 @@ class TypedField(GroupedField):
                 fieldtype = types.pop(fieldarg)
                 if len(fieldtype) == 1 and isinstance(fieldtype[0], nodes.Text):
                     typename = u''.join(n.astext() for n in fieldtype)
-                    par += self.make_xref(self.typerolename, domain, typename)
+                    par += self.make_xref(self.typerolename, domain, typename,
+                                          addnodes.literal_emphasis)
                 else:
                     par += fieldtype
                 par += nodes.Text(')')
@@ -234,7 +235,7 @@ class DocFieldTransformer(object):
                 # match the spec; capitalize field name and be done with it
                 new_fieldname = fieldtype[0:1].upper() + fieldtype[1:]
                 if fieldarg:
-                     new_fieldname += ' ' + fieldarg
+                    new_fieldname += ' ' + fieldarg
                 fieldname[0] = nodes.Text(new_fieldname)
                 entries.append(field)
                 continue
@@ -265,7 +266,7 @@ class DocFieldTransformer(object):
                     pass
                 else:
                     types.setdefault(typename, {})[argname] = \
-                                               [nodes.Text(argtype)]
+                        [nodes.Text(argtype)]
                     fieldarg = argname
 
             translatable_content = nodes.inline(fieldbody.rawsource,

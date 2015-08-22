@@ -8,10 +8,29 @@ This is the Sphinx documentation generator, see http://sphinx-doc.org/.
 Installing
 ==========
 
-Use ``setup.py``::
+Install from PyPI to use stable version::
 
-   python setup.py build
-   sudo python setup.py install
+   pip install -U sphinx
+
+Install from PyPI to use beta version::
+
+   pip install -U --pre sphinx
+
+Install from newest dev version in stable branch::
+
+   pip install git+https://github.com/sphinx-doc/sphinx@stable
+
+Install from newest dev version in master branch::
+
+   pip install git+https://github.com/sphinx-doc/sphinx
+
+Install from cloned source::
+
+   pip install .
+
+Install from cloned source as editable::
+
+   pip install -e .
 
 
 Reading the docs
@@ -55,8 +74,8 @@ Contributing
    to start making your changes to the **master** branch for next major
    version, or **stable** branch for next minor version.
 #. Write a test which shows that the bug was fixed or that the feature works
-   as expected.
+   as expected.  Use ``make test`` to run the test suite.
 #. Send a pull request and bug the maintainer until it gets merged and
-   published. Make sure to add yourself to AUTHORS
+   published.  Make sure to add yourself to AUTHORS
    <https://github.com/sphinx-doc/sphinx/blob/master/AUTHORS> and the change to
    CHANGES <https://github.com/sphinx-doc/sphinx/blob/master/CHANGES>.

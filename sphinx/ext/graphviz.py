@@ -140,10 +140,9 @@ class GraphvizSimple(Directive):
 
 def render_dot(self, code, options, format, prefix='graphviz'):
     """Render graphviz code into a PNG or PDF output file."""
-    hashkey = (code + str(options) + \
-              str(self.builder.config.graphviz_dot) + \
-              str(self.builder.config.graphviz_dot_args)
-              ).encode('utf-8')
+    hashkey = (code + str(options) +
+               str(self.builder.config.graphviz_dot) +
+               str(self.builder.config.graphviz_dot_args)).encode('utf-8')
 
     fname = '%s-%s.%s' % (prefix, sha1(hashkey).hexdigest(), format)
     relfn = posixpath.join(self.builder.imgpath, fname)
@@ -284,6 +283,7 @@ def render_dot_texinfo(self, node, code, options, prefix='graphviz'):
         self.body.append('@image{%s,,,[graphviz],png}\n' % fname[:-4])
     raise nodes.SkipNode
 
+
 def texinfo_visit_graphviz(self, node):
     render_dot_texinfo(self, node, node['code'], node['options'])
 
@@ -317,4 +317,4 @@ def setup(app):
     app.add_config_value('graphviz_dot', 'dot', 'html')
     app.add_config_value('graphviz_dot_args', [], 'html')
     app.add_config_value('graphviz_output_format', 'png', 'html')
-    return {'version': sphinx.__version__, 'parallel_read_safe': True}
+    return {'version': sphinx.__display_version__, 'parallel_read_safe': True}

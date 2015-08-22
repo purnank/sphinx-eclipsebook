@@ -109,10 +109,10 @@ def read_inventory_v2(f, uri, join, bufsize=16*1024):
             continue
         name, type, prio, location, dispname = m.groups()
         if type == 'py:module' and type in invdata and \
-            name in invdata[type]:  # due to a bug in 1.1 and below,
-                                    # two inventory entries are created
-                                    # for Python modules, and the first
-                                    # one is correct
+                name in invdata[type]:  # due to a bug in 1.1 and below,
+                                        # two inventory entries are created
+                                        # for Python modules, and the first
+                                        # one is correct
             continue
         if location.endswith(u'$'):
             location = location[:-1] + name
@@ -212,7 +212,7 @@ def load_mappings(app):
         cached_vals = list(cache.values())
         named_vals = sorted(v for v in cached_vals if v[0])
         unnamed_vals = [v for v in cached_vals if not v[0]]
-        for name, _, invdata in named_vals + unnamed_vals:
+        for name, _x, invdata in named_vals + unnamed_vals:
             if name:
                 env.intersphinx_named_inventory[name] = invdata
             for type, objects in iteritems(invdata):
@@ -282,4 +282,4 @@ def setup(app):
     app.add_config_value('intersphinx_cache_limit', 5, False)
     app.connect('missing-reference', missing_reference)
     app.connect('builder-inited', load_mappings)
-    return {'version': sphinx.__version__, 'parallel_read_safe': True}
+    return {'version': sphinx.__display_version__, 'parallel_read_safe': True}

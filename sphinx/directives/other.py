@@ -39,6 +39,8 @@ class TocTree(Directive):
     final_argument_whitespace = False
     option_spec = {
         'maxdepth': int,
+        'name': directives.unchanged,
+        'caption': directives.unchanged_required,
         'glob': directives.flag,
         'hidden': directives.flag,
         'includehidden': directives.flag,
@@ -48,8 +50,11 @@ class TocTree(Directive):
 
     def run(self):
         env = self.state.document.settings.env
-        suffix = env.config.source_suffix
+        suffixes = env.config.source_suffix
         glob = 'glob' in self.options
+        caption = self.options.get('caption')
+        if caption:
+            self.options.setdefault('name', nodes.fully_normalize_name(caption))
 
         ret = []
         # (title, ref) pairs, where ref may be a document, or an external link,
@@ -84,8 +89,10 @@ class TocTree(Directive):
                     ref = docname = entry
                     title = None
                 # remove suffixes (backwards compatibility)
-                if docname.endswith(suffix):
-                    docname = docname[:-len(suffix)]
+                for suffix in suffixes:
+                    if docname.endswith(suffix):
+                        docname = docname[:-len(suffix)]
+                        break
                 # absolutize filenames
                 docname = docname_join(env.docname, docname)
                 if url_re.match(ref) or ref == 'self':
@@ -106,6 +113,7 @@ class TocTree(Directive):
         # includefiles only entries that are documents
         subnode['includefiles'] = includefiles
         subnode['maxdepth'] = self.options.get('maxdepth', -1)
+        subnode['caption'] = caption
         subnode['glob'] = glob
         subnode['hidden'] = 'hidden' in self.options
         subnode['includehidden'] = 'includehidden' in self.options
@@ -114,6 +122,7 @@ class TocTree(Directive):
         set_source_info(self, subnode)
         wrappernode = nodes.compound(classes=['toctree-wrapper'])
         wrappernode.append(subnode)
+        self.add_name(wrappernode)
         ret.append(wrappernode)
         return ret
 
@@ -214,7 +223,8 @@ class VersionChange(Directive):
                                            classes=['versionmodified']))
         else:
             para = nodes.paragraph('', '',
-                nodes.inline('', '%s.' % text, classes=['versionmodified']))
+                                   nodes.inline('', '%s.' % text,
+                                                classes=['versionmodified']))
             node.append(para)
         env = self.state.document.settings.env
         # XXX should record node.source as well
@@ -349,10 +359,10 @@ class Only(Directive):
             self.state.nested_parse(self.content, self.content_offset,
                                     node, match_titles=1)
             title_styles = self.state.memo.title_styles
-            if (not surrounding_title_styles
-                or not title_styles
-                or title_styles[0] not in surrounding_title_styles
-                or not self.state.parent):
+            if (not surrounding_title_styles or
+                    not title_styles or
+                    title_styles[0] not in surrounding_title_styles or
+                    not self.state.parent):
                 # No nested sections so no special handling needed.
                 return [node]
             # Calculate the depths of the current and nested sections.

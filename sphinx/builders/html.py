@@ -26,7 +26,7 @@ from docutils.utils import new_document
 from docutils.frontend import OptionParser
 from docutils.readers.doctree import Reader as DoctreeReader
 
-from sphinx import package_dir, __version__
+from sphinx import package_dir, __display_version__
 from sphinx.util import jsonimpl, copy_static_entry
 from sphinx.util.osutil import SEP, os_path, relative_uri, ensuredir, \
     movefile, ustrftime, copyfile
@@ -78,6 +78,7 @@ class StandaloneHTMLBuilder(Builder):
     searchindex_filename = 'searchindex.js'
     add_permalinks = True
     embedded = False  # for things like HTML help or Qt help: suppresses sidebar
+    search = True  # for things like HTML help and Apple help: suppress search
 
     # This is a class attribute because it is mutated by Sphinx.add_javascript.
     script_files = ['_static/jquery.js', '_static/underscore.js',
@@ -137,7 +138,7 @@ class StandaloneHTMLBuilder(Builder):
         Theme.init_themes(self.confdir, self.config.html_theme_path,
                           warn=self.warn)
         themename, themeoptions = self.get_theme_config()
-        self.theme = Theme(themename)
+        self.theme = Theme(themename, warn=self.warn)
         self.theme_options = themeoptions.copy()
         self.create_template_bridge()
         self.templates.init(self, self.theme)
@@ -193,7 +194,7 @@ class StandaloneHTMLBuilder(Builder):
         except Exception:
             pass
         if old_config_hash != self.config_hash or \
-               old_tags_hash != self.tags_hash:
+           old_tags_hash != self.tags_hash:
             for docname in self.env.found_docs:
                 yield docname
             return
@@ -229,8 +230,8 @@ class StandaloneHTMLBuilder(Builder):
 
         if self._publisher is None:
             self._publisher = Publisher(
-                    source_class = DocTreeInput,
-                    destination_class=StringOutput)
+                source_class = DocTreeInput,
+                destination_class=StringOutput)
             self._publisher.set_components('standalone',
                                            'restructuredtext', 'pseudoxml')
 
@@ -247,14 +248,16 @@ class StandaloneHTMLBuilder(Builder):
 
     def prepare_writing(self, docnames):
         # create the search indexer
-        from sphinx.search import IndexBuilder, languages
-        lang = self.config.html_search_language or self.config.language
-        if not lang or lang not in languages:
-            lang = 'en'
-        self.indexer = IndexBuilder(self.env, lang,
-                                    self.config.html_search_options,
-                                    self.config.html_search_scorer)
-        self.load_indexer(docnames)
+        self.indexer = None
+        if self.search:
+            from sphinx.search import IndexBuilder, languages
+            lang = self.config.html_search_language or self.config.language
+            if not lang or lang not in languages:
+                lang = 'en'
+            self.indexer = IndexBuilder(self.env, lang,
+                                        self.config.html_search_options,
+                                        self.config.html_search_scorer)
+            self.load_indexer(docnames)
 
         self.docwriter = HTMLWriter(self)
         self.docsettings = OptionParser(
@@ -277,7 +280,7 @@ class StandaloneHTMLBuilder(Builder):
                             continue
                     # deprecated config value
                     if indexname == 'py-modindex' and \
-                           not self.config.html_use_modindex:
+                       not self.config.html_use_modindex:
                         continue
                     content, collapse = indexcls(domain).generate()
                     if content:
@@ -293,10 +296,10 @@ class StandaloneHTMLBuilder(Builder):
             self.last_updated = None
 
         logo = self.config.html_logo and \
-               path.basename(self.config.html_logo) or ''
+            path.basename(self.config.html_logo) or ''
 
         favicon = self.config.html_favicon and \
-                  path.basename(self.config.html_favicon) or ''
+            path.basename(self.config.html_favicon) or ''
         if favicon and os.path.splitext(favicon)[1] != '.ico':
             self.warn('html_favicon is not an .ico file')
 
@@ -340,7 +343,7 @@ class StandaloneHTMLBuilder(Builder):
             script_files = self.script_files,
             language = self.config.language,
             css_files = self.css_files,
-            sphinx_version = __version__,
+            sphinx_version = __display_version__,
             style = stylename,
             rellinks = rellinks,
             builder = self.name,
@@ -391,8 +394,9 @@ class StandaloneHTMLBuilder(Builder):
                 pass
             related = self.relations.get(related[0])
         if parents:
-            parents.pop() # remove link to the master file; we have a generic
-                          # "back to index" link already
+            # remove link to the master file; we have a generic
+            # "back to index" link already
+            parents.pop()
         parents.reverse()
 
         # title rendered as HTML
@@ -485,12 +489,12 @@ class StandaloneHTMLBuilder(Builder):
             self.handle_page(pagename, {}, template)
 
         # the search page
-        if self.name != 'htmlhelp':
+        if self.search:
             self.info(' search', nonl=1)
             self.handle_page('search', {}, 'search.html')
 
         # the opensearch xml file
-        if self.config.html_use_opensearch and self.name != 'htmlhelp':
+        if self.config.html_use_opensearch and self.search:
             self.info(' opensearch', nonl=1)
             fn = path.join(self.outdir, '_static', 'opensearch.xml')
             self.handle_page('opensearch', {}, 'opensearch.xml', outfilename=fn)
@@ -502,7 +506,7 @@ class StandaloneHTMLBuilder(Builder):
         # the entries into two columns
         genindex = self.env.create_index(self)
         indexcounts = []
-        for _, entries in genindex:
+        for _k, entries in genindex:
             indexcounts.append(sum(1 + len(subitems)
                                    for _, (_, subitems) in entries))
 
@@ -580,9 +584,17 @@ class StandaloneHTMLBuilder(Builder):
                 copyfile(jsfile, path.join(self.outdir, '_static',
                                            'translations.js'))
 
-        # add context items for search function used in searchtools.js_t
+        # copy non-minified stemmer JavaScript file
+        if self.indexer is not None:
+            jsfile = self.indexer.get_js_stemmer_rawcode()
+            if jsfile:
+                copyfile(jsfile, path.join(self.outdir, '_static', '_stemmer.js'))
+
         ctx = self.globalcontext.copy()
-        ctx.update(self.indexer.context_for_searchtool())
+
+        # add context items for search function used in searchtools.js_t
+        if self.indexer is not None:
+            ctx.update(self.indexer.context_for_searchtool())
 
         # then, copy over theme-supplied static files
         if self.theme:
@@ -654,23 +666,25 @@ class StandaloneHTMLBuilder(Builder):
         their high res version.
         """
         Builder.post_process_images(self, doctree)
-        for node in doctree.traverse(nodes.image):
-            scale_keys = ('scale', 'width', 'height')
-            if not any((key in node) for key in scale_keys) or \
-               isinstance(node.parent, nodes.reference):
-                # docutils does unfortunately not preserve the
-                # ``target`` attribute on images, so we need to check
-                # the parent node here.
-                continue
-            uri = node['uri']
-            reference = nodes.reference('', '', internal=True)
-            if uri in self.images:
-                reference['refuri'] = posixpath.join(self.imgpath,
-                                                     self.images[uri])
-            else:
-                reference['refuri'] = uri
-            node.replace_self(reference)
-            reference.append(node)
+
+        if self.config.html_scaled_image_link:
+            for node in doctree.traverse(nodes.image):
+                scale_keys = ('scale', 'width', 'height')
+                if not any((key in node) for key in scale_keys) or \
+                   isinstance(node.parent, nodes.reference):
+                    # docutils does unfortunately not preserve the
+                    # ``target`` attribute on images, so we need to check
+                    # the parent node here.
+                    continue
+                uri = node['uri']
+                reference = nodes.reference('', '', internal=True)
+                if uri in self.images:
+                    reference['refuri'] = posixpath.join(self.imgpath,
+                                                         self.images[uri])
+                else:
+                    reference['refuri'] = uri
+                node.replace_self(reference)
+                reference.append(node)
 
     def load_indexer(self, docnames):
         keep = set(self.env.all_docs) - set(docnames)
@@ -802,7 +816,8 @@ class StandaloneHTMLBuilder(Builder):
             copyfile(self.env.doc2path(pagename), source_name)
 
     def handle_finish(self):
-        self.finish_tasks.add_task(self.dump_search_index)
+        if self.indexer:
+            self.finish_tasks.add_task(self.dump_search_index)
         self.finish_tasks.add_task(self.dump_inventory)
 
     def dump_inventory(self):
@@ -813,8 +828,7 @@ class StandaloneHTMLBuilder(Builder):
                      u'# Project: %s\n'
                      u'# Version: %s\n'
                      u'# The remainder of this file is compressed using zlib.\n'
-                     % (self.config.project, self.config.version)
-                    ).encode('utf-8'))
+                     % (self.config.project, self.config.version)).encode('utf-8'))
             compressor = zlib.compressobj(9)
             for domainname, domain in iteritems(self.env.domains):
                 for name, dispname, type, docname, anchor, prio in \
@@ -827,8 +841,7 @@ class StandaloneHTMLBuilder(Builder):
                         dispname = u'-'
                     f.write(compressor.compress(
                         (u'%s %s:%s %s %s %s\n' % (name, domainname, type,
-                                                   prio, uri, dispname)
-                        ).encode('utf-8')))
+                                                   prio, uri, dispname)).encode('utf-8')))
             f.write(compressor.flush())
         finally:
             f.close()
@@ -866,13 +879,13 @@ class DirectoryHTMLBuilder(StandaloneHTMLBuilder):
         if docname == 'index':
             return ''
         if docname.endswith(SEP + 'index'):
-            return docname[:-5] # up to sep
+            return docname[:-5]  # up to sep
         return docname + SEP
 
     def get_outfilename(self, pagename):
         if pagename == 'index' or pagename.endswith(SEP + 'index'):
-            outfilename = path.join(self.outdir, os_path(pagename)
-                                    + self.out_suffix)
+            outfilename = path.join(self.outdir, os_path(pagename) +
+                                    self.out_suffix)
         else:
             outfilename = path.join(self.outdir, os_path(pagename),
                                     'index' + self.out_suffix)
@@ -899,7 +912,7 @@ class SingleFileHTMLBuilder(StandaloneHTMLBuilder):
         if docname in self.env.all_docs:
             # all references are on the same page...
             return self.config.master_doc + self.out_suffix + \
-                   '#document-' + docname
+                '#document-' + docname
         else:
             # chances are this is a html_additional_page
             return docname + self.out_suffix
@@ -925,7 +938,7 @@ class SingleFileHTMLBuilder(StandaloneHTMLBuilder):
     def assemble_doctree(self):
         master = self.config.master_doc
         tree = self.env.get_doctree(master)
-        tree = inline_all_toctrees(self, set(), master, tree, darkgreen)
+        tree = inline_all_toctrees(self, set(), master, tree, darkgreen, [master])
         tree['docname'] = master
         self.env.resolve_references(tree, master, self)
         self.fix_refuris(tree)
@@ -1045,7 +1058,7 @@ class SerializingHTMLBuilder(StandaloneHTMLBuilder):
         if docname == 'index':
             return ''
         if docname.endswith(SEP + 'index'):
-            return docname[:-5] # up to sep
+            return docname[:-5]  # up to sep
         return docname + SEP
 
     def dump_context(self, context, filename):

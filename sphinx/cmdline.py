@@ -10,7 +10,6 @@
 """
 from __future__ import print_function
 
-import os
 import sys
 import optparse
 import traceback
@@ -19,7 +18,7 @@ from os import path
 from six import text_type, binary_type
 from docutils.utils import SystemMessage
 
-from sphinx import __version__
+from sphinx import __display_version__
 from sphinx.errors import SphinxError
 from sphinx.application import Sphinx
 from sphinx.util import Tee, format_exception_cut_frames, save_traceback
@@ -27,11 +26,6 @@ from sphinx.util.console import red, nocolor, color_terminal
 from sphinx.util.osutil import abspath, fs_encoding
 from sphinx.util.pycompat import terminal_safe
 
-
-def usage(argv, msg=None):
-    if msg:
-        print(msg, file=sys.stderr)
-        print(file=sys.stderr)
 
 USAGE = """\
 Sphinx v%s
@@ -41,7 +35,7 @@ Filename arguments:
   without -a and without filenames, write new and changed files.
   with -a, write all files.
   with filenames, write these.
-""" % __version__
+""" % __display_version__
 
 EPILOG = """\
 For more information, visit <http://sphinx-doc.org/>.
@@ -132,7 +126,7 @@ def main(argv):
 
     # handle basic options
     if opts.version:
-        print('Sphinx (sphinx-build) %s' % __version__)
+        print('Sphinx (sphinx-build) %s' % __display_version__)
         return 0
 
     # get paths (first and second positional argument)
@@ -151,7 +145,7 @@ def main(argv):
             return 1
         outdir = abspath(args[1])
     except IndexError:
-        usage(argv, 'Error: Insufficient arguments.')
+        parser.print_help()
         return 1
     except UnicodeError:
         print(

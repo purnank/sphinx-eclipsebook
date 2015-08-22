@@ -314,6 +314,7 @@ are recognized and formatted nicely:
 * ``raises``, ``raise``, ``except``, ``exception``: That (and when) a specific
   exception is raised.
 * ``var``, ``ivar``, ``cvar``: Description of a variable.
+* ``vartype``: Type of a variable.  Creates a link if possible.
 * ``returns``, ``return``: Description of the return value.
 * ``rtype``: Return type.  Creates a link if possible.
 
@@ -557,13 +558,16 @@ a visibility statement (``public``, ``private`` or ``protected``).
 
          Describe a copy constructor with default implementation.
 
-.. rst:directive:: .. cpp:member:: variable or member declaration
+.. rst:directive:: .. cpp:member:: (member-)variable declaration
+                   .. cpp:var:: (member-)variable declaration
 
    Describe a varible or member variable, e.g.,::
 
       .. cpp:member:: std::string theclass::name
 
       .. cpp:member:: std::string theclass::name[N][M]
+
+      .. cpp:member:: int a = 42
 
 .. rst:directive:: .. cpp:type:: typedef-like declaration
                    .. cpp:type:: name
@@ -585,7 +589,7 @@ a visibility statement (``public``, ``private`` or ``protected``).
    Describe a (scoped) enum, possibly with the underlying type specified.
    Any enumerators declared inside an unscoped enum will be declared both in the enum scope
    and in the parent scope.
-   Examples:
+   Examples::
 
       .. cpp:enum:: MyEnum
 
@@ -626,9 +630,11 @@ a visibility statement (``public``, ``private`` or ``protected``).
 
 These roles link to the given object types:
 
-.. rst:role:: cpp:class
+.. rst:role:: cpp:any
+              cpp:class
               cpp:func
               cpp:member
+              cpp:var
               cpp:type
               cpp:enum
               cpp:enumerator

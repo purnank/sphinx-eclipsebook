@@ -18,8 +18,6 @@ import time
 from os import path
 from io import open
 
-TERM_ENCODING = getattr(sys.stdin, 'encoding', None)
-
 # try to import readline, unix specific enhancement
 try:
     import readline
@@ -30,15 +28,18 @@ try:
 except ImportError:
     pass
 
-from six import PY2, PY3, text_type
+from six import PY2, PY3, text_type, binary_type
 from six.moves import input
+from six.moves.urllib.parse import quote as urlquote
 from docutils.utils import column_width
 
-from sphinx import __version__
+from sphinx import __display_version__
 from sphinx.util.osutil import make_filename
 from sphinx.util.console import purple, bold, red, turquoise, \
     nocolor, color_terminal
 from sphinx.util import texescape
+
+TERM_ENCODING = getattr(sys.stdin, 'encoding', None)
 
 # function to get input from terminal -- overridden by the test suite
 term_input = input
@@ -56,7 +57,7 @@ DEFAULT_VALUE = {
     'ext_todo': False,
     'makefile': True,
     'batchfile': True,
-    }
+}
 
 EXTENSIONS = ('autodoc', 'doctest', 'intersphinx', 'todo', 'coverage',
               'pngmath', 'mathjax', 'ifconfig', 'viewcode')
@@ -86,6 +87,7 @@ QUICKSTART_CONF += u'''\
 
 import sys
 import os
+import shlex
 
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
@@ -105,7 +107,9 @@ extensions = [%(extensions)s]
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['%(dot)stemplates']
 
-# The suffix of source filenames.
+# The suffix(es) of source filenames.
+# You can specify multiple suffix as a list of string:
+# source_suffix = ['.rst', '.md']
 source_suffix = '%(suffix)s'
 
 # The encoding of source files.
@@ -177,7 +181,7 @@ todo_include_todos = %(ext_todo)s
 
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
-html_theme = 'default'
+html_theme = 'alabaster'
 
 # Theme options are theme-specific and customize the look and feel of a theme
 # further.  For a list of options available for each theme, see the
@@ -434,7 +438,7 @@ epub_exclude_files = ['search.html']
 INTERSPHINX_CONFIG = u'''
 
 # Example configuration for intersphinx: refer to the Python standard library.
-intersphinx_mapping = {'http://docs.python.org/': None}
+intersphinx_mapping = {'https://docs.python.org/': None}
 '''
 
 MASTER_FILE = u'''\
@@ -502,6 +506,7 @@ help:
 \t@echo "  json       to make JSON files"
 \t@echo "  htmlhelp   to make HTML files and a HTML help project"
 \t@echo "  qthelp     to make HTML files and a qthelp project"
+\t@echo "  applehelp  to make an Apple Help Book"
 \t@echo "  devhelp    to make HTML files and a Devhelp project"
 \t@echo "  epub       to make an epub"
 \t@echo "  latex      to make LaTeX files, you can set PAPER=a4 or PAPER=letter"
@@ -562,6 +567,14 @@ qthelp:
 \t@echo "# qcollectiongenerator $(BUILDDIR)/qthelp/%(project_fn)s.qhcp"
 \t@echo "To view the help file:"
 \t@echo "# assistant -collectionFile $(BUILDDIR)/qthelp/%(project_fn)s.qhc"
+
+applehelp:
+\t$(SPHINXBUILD) -b applehelp $(ALLSPHINXOPTS) $(BUILDDIR)/applehelp
+\t@echo
+\t@echo "Build finished. The help book is in $(BUILDDIR)/applehelp."
+\t@echo "N.B. You won't be able to view it unless you put it in" \\
+\t      "~/Library/Documentation/Help or install it in your application" \\
+\t      "bundle."
 
 devhelp:
 \t$(SPHINXBUILD) -b devhelp $(ALLSPHINXOPTS) $(BUILDDIR)/devhelp
@@ -1043,6 +1056,27 @@ def ok(x):
     return x
 
 
+def term_decode(text):
+    if isinstance(text, text_type):
+        return text
+
+    # for Python 2.x, try to get a Unicode string out of it
+    if text.decode('ascii', 'replace').encode('ascii', 'replace') == text:
+        return text
+
+    if TERM_ENCODING:
+        text = text.decode(TERM_ENCODING)
+    else:
+        print(turquoise('* Note: non-ASCII characters entered '
+                        'and terminal encoding unknown -- assuming '
+                        'UTF-8 or Latin-1.'))
+        try:
+            text = text.decode('utf-8')
+        except UnicodeDecodeError:
+            text = text.decode('latin1')
+    return text
+
+
 def do_prompt(d, key, text, default=None, validator=nonempty):
     while True:
         if default:
@@ -1067,19 +1101,7 @@ def do_prompt(d, key, text, default=None, validator=nonempty):
         x = term_input(prompt).strip()
         if default and not x:
             x = default
-        if not isinstance(x, text_type):
-            # for Python 2.x, try to get a Unicode string out of it
-            if x.decode('ascii', 'replace').encode('ascii', 'replace') != x:
-                if TERM_ENCODING:
-                    x = x.decode(TERM_ENCODING)
-                else:
-                    print(turquoise('* Note: non-ASCII characters entered '
-                                    'and terminal encoding unknown -- assuming '
-                                    'UTF-8 or Latin-1.'))
-                    try:
-                        x = x.decode('utf-8')
-                    except UnicodeDecodeError:
-                        x = x.decode('latin1')
+        x = term_decode(x)
         try:
             x = validator(x)
         except ValidationError as err:
@@ -1121,7 +1143,7 @@ def ask_user(d):
     * batchfile: make command file
     """
 
-    print(bold('Welcome to the Sphinx %s quickstart utility.') % __version__)
+    print(bold('Welcome to the Sphinx %s quickstart utility.') % __display_version__)
     print('''
 Please enter values for the following settings (just press Enter to
 accept a default value, if one is given in brackets).''')
@@ -1284,6 +1306,7 @@ def generate(d, overwrite=True, silent=False):
         d['mastertocmaxdepth'] = 2
 
     d['project_fn'] = make_filename(d['project'])
+    d['project_url'] = urlquote(d['project'].encode('idna'))
     d['project_manpage'] = d['project_fn'].lower()
     d['now'] = time.asctime()
     d['project_underline'] = column_width(d['project']) * '='
@@ -1390,11 +1413,40 @@ def usage(argv, msg=None):
 USAGE = """\
 Sphinx v%s
 Usage: %%prog [options] [projectdir]
-""" % __version__
+""" % __display_version__
 
 EPILOG = """\
 For more information, visit <http://sphinx-doc.org/>.
 """
+
+
+def valid_dir(d):
+    dir = d['path']
+    if not path.exists(dir):
+        return True
+    if not path.isdir(dir):
+        return False
+
+    if set(['Makefile', 'make.bat']) & set(os.listdir(dir)):
+        return False
+
+    if d['sep']:
+        dir = os.path.join('source', dir)
+        if not path.exists(dir):
+            return True
+        if not path.isdir(dir):
+            return False
+
+    reserved_names = [
+        'conf.py',
+        d['dot'] + 'static',
+        d['dot'] + 'templates',
+        d['master'] + d['suffix'],
+    ]
+    if set(reserved_names) & set(os.listdir(dir)):
+        return False
+
+    return True
 
 
 class MyFormatter(optparse.IndentedHelpFormatter):
@@ -1415,7 +1467,7 @@ def main(argv=sys.argv):
         nocolor()
 
     parser = optparse.OptionParser(USAGE, epilog=EPILOG,
-                                   version='Sphinx v%s' % __version__,
+                                   version='Sphinx v%s' % __display_version__,
                                    formatter=MyFormatter())
     parser.add_option('-q', '--quiet', action='store_true', dest='quiet',
                       default=False,
@@ -1480,21 +1532,17 @@ def main(argv=sys.argv):
         opts.ensure_value('path', args[0])
 
     d = vars(opts)
-    for k, v in list(d.items()):
-        # delete None or False value
-        if v is None or v is False:
-            del d[k]
+    # delete None or False value
+    d = dict((k, v) for k, v in d.items() if not (v is None or v is False))
 
     try:
         if 'quiet' in d:
-            if 'project' not in d or 'author' not in d or \
-               'version' not in d:
+            if not set(['project', 'author', 'version']).issubset(d):
                 print('''"quiet" is specified, but any of "project", \
 "author" or "version" is not specified.''')
                 return
 
-        if all(['quiet' in d, 'project' in d, 'author' in d,
-                'version' in d]):
+        if set(['quiet', 'project', 'author', 'version']).issubset(d):
             # quiet mode with all required params satisfied, use default
             d.setdefault('release', d['version'])
             d2 = DEFAULT_VALUE.copy()
@@ -1506,11 +1554,10 @@ def main(argv=sys.argv):
             if 'no_batchfile' in d:
                 d['batchfile'] = False
 
-            if path.exists(d['path']) and (
-                    not path.isdir(d['path']) or os.listdir(d['path'])):
+            if not valid_dir(d):
                 print()
-                print(bold('Error: specified path is not a directory, or not a'
-                           ' empty directory.'))
+                print(bold('Error: specified path is not a directory, or sphinx'
+                           ' files already exist.'))
                 print('sphinx-quickstart only generate into a empty directory.'
                       ' Please specify a new root path.')
                 return
@@ -1520,6 +1567,12 @@ def main(argv=sys.argv):
         print()
         print('[Interrupted.]')
         return
+
+    # decode values in d if value is a Python string literal
+    for key, value in d.items():
+        if isinstance(value, binary_type):
+            d[key] = term_decode(value)
+
     generate(d)
 
 if __name__ == '__main__':

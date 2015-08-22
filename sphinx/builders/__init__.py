@@ -21,14 +21,15 @@ except ImportError:
 from docutils import nodes
 
 from sphinx.util import i18n, path_stabilize
-from sphinx.util.osutil import SEP, relative_uri, find_catalog
+from sphinx.util.osutil import SEP, relative_uri
+from sphinx.util.i18n import find_catalog
 from sphinx.util.console import bold, darkgreen
 from sphinx.util.parallel import ParallelTasks, SerialTasks, make_chunks, \
     parallel_available
 
 # side effect: registers roles and directives
-from sphinx import roles
-from sphinx import directives
+from sphinx import roles       # noqa
+from sphinx import directives  # noqa
 
 
 class Builder(object):
@@ -159,16 +160,23 @@ class Builder(object):
     def compile_catalogs(self, catalogs, message):
         if not self.config.gettext_auto_build:
             return
+
+        def cat2relpath(cat):
+            return path.relpath(cat.mo_path, self.env.srcdir).replace(path.sep, SEP)
+
         self.info(bold('building [mo]: ') + message)
         for catalog in self.app.status_iterator(
                 catalogs, 'writing output... ', darkgreen, len(catalogs),
-                lambda c: c.mo_path):
+                cat2relpath):
             catalog.write_mo(self.config.language)
 
     def compile_all_catalogs(self):
-        catalogs = i18n.get_catalogs(
+        catalogs = i18n.find_catalog_source_files(
             [path.join(self.srcdir, x) for x in self.config.locale_dirs],
-            self.config.language, True)
+            self.config.language,
+            charset=self.config.source_encoding,
+            gettext_compact=self.config.gettext_compact,
+            force_all=True)
         message = 'all of %d po files' % len(catalogs)
         self.compile_catalogs(catalogs, message)
 
@@ -179,17 +187,21 @@ class Builder(object):
             return dom
 
         specified_domains = set(map(to_domain, specified_files))
-        catalogs = i18n.get_catalogs(
+        catalogs = i18n.find_catalog_source_files(
             [path.join(self.srcdir, x) for x in self.config.locale_dirs],
-            self.config.language, True)
-        catalogs = [f for f in catalogs if f.domain in specified_domains]
+            self.config.language,
+            domains=list(specified_domains),
+            charset=self.config.source_encoding,
+            gettext_compact=self.config.gettext_compact)
         message = 'targets for %d po files that are specified' % len(catalogs)
         self.compile_catalogs(catalogs, message)
 
     def compile_update_catalogs(self):
-        catalogs = i18n.get_catalogs(
+        catalogs = i18n.find_catalog_source_files(
             [path.join(self.srcdir, x) for x in self.config.locale_dirs],
-            self.config.language)
+            self.config.language,
+            charset=self.config.source_encoding,
+            gettext_compact=self.config.gettext_compact)
         message = 'targets for %d po files that are out of date' % len(catalogs)
         self.compile_catalogs(catalogs, message)
 
@@ -205,20 +217,23 @@ class Builder(object):
         # relative to the source directory and without source_suffix.
         dirlen = len(self.srcdir) + 1
         to_write = []
-        suffix = self.config.source_suffix
+        suffixes = tuple(self.config.source_suffix)
         for filename in filenames:
             filename = path.normpath(path.abspath(filename))
             if not filename.startswith(self.srcdir):
                 self.warn('file %r given on command line is not under the '
                           'source directory, ignoring' % filename)
                 continue
-            if not (path.isfile(filename) or path.isfile(filename + suffix)):
+            if not (path.isfile(filename) or
+                    any(path.isfile(filename + suffix) for suffix in suffixes)):
                 self.warn('file %r given on command line does not exist, '
                           'ignoring' % filename)
                 continue
             filename = filename[dirlen:]
-            if filename.endswith(suffix):
-                filename = filename[:-len(suffix)]
+            for suffix in suffixes:
+                if filename.endswith(suffix):
+                    filename = filename[:-len(suffix)]
+                    break
             filename = filename.replace(path.sep, SEP)
             to_write.append(filename)
         self.build(to_write, method='specific',
@@ -445,6 +460,7 @@ BUILTIN_BUILDERS = {
     'htmlhelp':   ('htmlhelp', 'HTMLHelpBuilder'),
     'devhelp':    ('devhelp', 'DevhelpBuilder'),
     'qthelp':     ('qthelp', 'QtHelpBuilder'),
+    'applehelp':  ('applehelp', 'AppleHelpBuilder'),
     'epub':       ('epub', 'EpubBuilder'),
     'epub3':      ('epub3', 'Epub3Builder'),
     'latex':      ('latex', 'LaTeXBuilder'),
