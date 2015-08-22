@@ -240,7 +240,7 @@ _amp_re = re.compile(r'(?<!&)&(?![&\s])')
 def menusel_role(typ, rawtext, text, lineno, inliner, options={}, content=[]):
     text = utils.unescape(text)
     if typ == 'menuselection':
-        text = text.replace('-->', u'\N{TRIANGULAR BULLET}')
+        text = text.replace('-->', u'\N{RIGHTWARDS ARROW}')
     spans = _amp_re.split(text)
 
     node = nodes.emphasis(rawtext=rawtext)
