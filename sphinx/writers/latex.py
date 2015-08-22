@@ -482,8 +482,9 @@ class LaTeXTranslator(nodes.NodeVisitor):
         self.body.append('}')
 
     def visit_topic(self, node):
-        self.body.append('\\setbox0\\vbox{\n'
-                         '\\begin{minipage}{0.95\\linewidth}\n')
+        #M+: Force \\vbox to be a bit smaller
+        self.body.append('\\setbox0\\vbox{\\hsize=0.95\\linewidth\n'
+                         '\\begin{minipage}{0.9\\linewidth}\n')
     def depart_topic(self, node):
         self.body.append('\\end{minipage}}\n'
                          '\\begin{center}\\setlength{\\fboxsep}{5pt}'
