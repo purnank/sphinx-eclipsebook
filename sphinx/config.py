@@ -167,6 +167,11 @@ class Config(object):
         latex_domain_indices = (True, None),
         latex_show_urls = ('no', None),
         latex_show_pagerefs = (False, None),
+#M+
+        latex_use_cleveref = (False, None),
+        latex_use_varioref = (False, None),
+        latex_use_minitoc = (False, None),
+#M-
         # paper_size and font_size are still separate values
         # so that you can give them easily on the command line
         latex_paper_size = ('letter', None),
