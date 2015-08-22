@@ -737,6 +737,11 @@ class LaTeXTranslator(nodes.NodeVisitor):
             endmacro = '\\end{tabular}\n\n'
         else:
             self.body.append('\n\\begin{tabulary}{\\linewidth}')
+            #M+
+            # Tabulary with |L| supports text wrapping.
+            if self.table.colspec:
+                self.table.colspec = self.table.colspec.replace('|l|','|L|')
+            #M-
             endmacro = '\\end{tabulary}\n\n'
         if self.table.colspec:
             self.body.append(self.table.colspec)
