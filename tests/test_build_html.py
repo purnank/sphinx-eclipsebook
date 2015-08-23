@@ -134,7 +134,7 @@ HTML_XPATH = {
         (".//li/strong", r'^program\\n$'),
         (".//li/em", r'^dfn\\n$'),
         (".//li/code/span[@class='pre']", r'^kbd\\n$'),
-        (".//li/span", u'File \N{TRIANGULAR BULLET} Close'),
+        (".//li/span", u'File \N{RIGHTWARDS ARROW} Close'),
         (".//li/code/span[@class='pre']", '^a/$'),
         (".//li/code/em/span[@class='pre']", '^varpart$'),
         (".//li/code/em/span[@class='pre']", '^i$'),

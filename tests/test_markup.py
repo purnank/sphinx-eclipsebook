@@ -102,7 +102,7 @@ def test_inline():
 
     # interpolation of arrows in menuselection
     yield (verify, ':menuselection:`a --> b`',
-           u'<p><span class="menuselection">a \N{TRIANGULAR BULLET} b</span></p>',
+           u'<p><span class="menuselection">a &#x2192; b</span></p>',
            '\\emph{a \\(\\rightarrow\\) b}')
 
     # interpolation of ampersands in guilabel/menuselection
