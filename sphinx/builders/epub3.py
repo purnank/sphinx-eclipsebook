@@ -141,7 +141,7 @@ class Epub3Builder(EpubBuilder):
         metadata['lang'] = self.esc(self.config.epub_language)
         metadata['toc_locale'] = self.esc(self._guide_titles['toc'])
 
-        with open(os.path.join(outdir,outname),"w") as nav:
+        with codecs.open(os.path.join(outdir,outname),"w","utf-8") as nav:
             nav.write(self._navigation_doc_template_pre % metadata)
             for n in self.refnodes:
                 cur_entry = n.copy()
