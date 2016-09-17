@@ -6,22 +6,25 @@
     Test message patching for internationalization purposes.  Runs the text
     builder in the test root.
 
-    :copyright: Copyright 2007-2015 by the Sphinx team, see AUTHORS.
+    :copyright: Copyright 2007-2016 by the Sphinx team, see AUTHORS.
     :license: BSD, see LICENSE for details.
 """
 from __future__ import print_function
 
 import os
 import re
+import pickle
+from docutils import nodes
 from subprocess import Popen, PIPE
 from xml.etree import ElementTree
 
+from babel.messages import pofile
 from nose.tools import assert_equal
 from six import string_types
 
-from util import tempdir, rootdir, path, gen_with_app, SkipTest, \
+from util import tempdir, rootdir, path, gen_with_app, with_app, SkipTest, \
     assert_re_search, assert_not_re_search, assert_in, assert_not_in, \
-    assert_startswith
+    assert_startswith, assert_node, repr_as
 
 
 root = tempdir / 'test-intl'
@@ -38,6 +41,11 @@ def gen_with_intl_app(builder, confoverrides={}, *args, **kw):
     default_kw.update(kw)
     default_kw['confoverrides'].update(confoverrides)
     return gen_with_app(builder, *args, **default_kw)
+
+
+def read_po(pathname):
+    with pathname.open() as f:
+        return pofile.read_po(f)
 
 
 def setup_module():
@@ -112,7 +120,7 @@ def test_text_builder(app, status, warning):
 
     # --- warnings in translation
 
-    warnings = warning.getvalue().replace(os.sep, '/')
+    warnings = getwarning(warning)
     warning_expr = u'.*/warnings.txt:4: ' \
                    u'WARNING: Inline literal start-string without end-string.\n'
     yield assert_re_search, warning_expr, warnings
@@ -149,7 +157,7 @@ def test_text_builder(app, status, warning):
               u"\n[100] THIS IS A NUMBERED FOOTNOTE.\n")
     yield assert_equal, result, expect
 
-    warnings = warning.getvalue().replace(os.sep, '/')
+    warnings = getwarning(warning)
     warning_fmt = u'.*/refs_inconsistency.txt:\\d+: ' \
                   u'WARNING: inconsistent %s in translated message\n'
     expected_warning_expr = (
@@ -170,21 +178,23 @@ def test_text_builder(app, status, warning):
               u"\n<SYSTEM MESSAGE:")
     yield assert_startswith, result, expect
 
-    warnings = warning.getvalue().replace(os.sep, '/')
+    warnings = getwarning(warning)
     expected_warning_expr = u'.*/literalblock.txt:\\d+: ' \
                             u'WARNING: Literal block expected; none found.'
     yield assert_re_search, expected_warning_expr, warnings
 
-    # --- definition terms: regression test for #975
+    # --- definition terms: regression test for #975, #2198, #2205
 
     result = (app.outdir / 'definition_terms.txt').text(encoding='utf-8')
     expect = (u"\nI18N WITH DEFINITION TERMS"
               u"\n**************************\n"
               u"\nSOME TERM"
               u"\n   THE CORRESPONDING DEFINITION\n"
-              u"\nSOME OTHER TERM"
+              u"\nSOME *TERM* WITH LINK"
               u"\n   THE CORRESPONDING DEFINITION #2\n"
-              u"\nSOME TERM WITH : CLASSIFIER1 : CLASSIFIER2"
+              u"\nSOME **TERM** WITH : CLASSIFIER1 : CLASSIFIER2"
+              u"\n   THE CORRESPONDING DEFINITION\n"
+              u"\nSOME TERM WITH : CLASSIFIER[]"
               u"\n   THE CORRESPONDING DEFINITION\n"
               )
     yield assert_equal, result, expect
@@ -200,7 +210,7 @@ def test_text_builder(app, status, warning):
               u"\n   THE CORRESPONDING GLOSSARY #2\n"
               u"\nLINK TO *SOME NEW TERM*.\n")
     yield assert_equal, result, expect
-    warnings = warning.getvalue().replace(os.sep, '/')
+    warnings = getwarning(warning)
     yield assert_not_in, 'term not in glossary', warnings
 
     # --- glossary term inconsistencies: regression test for #1090
@@ -211,7 +221,7 @@ def test_text_builder(app, status, warning):
               u"\n1. LINK TO *SOME NEW TERM*.\n")
     yield assert_equal, result, expect
 
-    warnings = warning.getvalue().replace(os.sep, '/')
+    warnings = getwarning(warning)
     expected_warning_expr = (
         u'.*/glossary_terms_inconsistency.txt:\\d+: '
         u'WARNING: inconsistent term references in translated message\n')
@@ -280,8 +290,8 @@ def test_text_builder(app, status, warning):
               u"\n      * **foo** -- DESCRIPTION OF PARAMETER foo\n"
               u"\n      * **bar** -- DESCRIPTION OF PARAMETER bar\n"
               u"\nclass Cls3(values)\n"
-              u"\n   Raises ValueError:"
-              u"\n      IF THE VALUES ARE OUT OF RANGE\n"
+              u"\n   Raises:"
+              u"\n      **ValueError** -- IF THE VALUES ARE OUT OF RANGE\n"
               u"\nclass Cls4(values)\n"
               u"\n   Raises:"
               u"\n      * **TypeError** -- IF THE VALUES ARE NOT VALID\n"
@@ -302,6 +312,31 @@ def test_text_builder(app, status, warning):
     for d in directives:
         yield assert_in, d.upper() + " TITLE", result
         yield assert_in, d.upper() + " BODY", result
+
+
+@gen_with_intl_app('gettext', freshenv=True)
+def test_gettext_builder(app, status, warning):
+    app.builder.build_all()
+
+    # --- definition terms: regression test for #2198, #2205
+    expect = read_po(app.srcdir / 'definition_terms.po')
+    actual = read_po(app.outdir / 'definition_terms.pot')
+    for expect_msg in [m for m in expect if m.id]:
+        yield assert_in, expect_msg.id, [m.id for m in actual if m.id]
+
+    # --- glossary terms: regression test for #1090
+    expect = read_po(app.srcdir / 'glossary_terms.po')
+    actual = read_po(app.outdir / 'glossary_terms.pot')
+    for expect_msg in [m for m in expect if m.id]:
+        yield assert_in, expect_msg.id, [m.id for m in actual if m.id]
+    warnings = warning.getvalue().replace(os.sep, '/')
+    yield assert_not_in, 'term not in glossary', warnings
+
+    # --- glossary term inconsistencies: regression test for #1090
+    expect = read_po(app.srcdir / 'glossary_terms_inconsistency.po')
+    actual = read_po(app.outdir / 'glossary_terms_inconsistency.pot')
+    for expect_msg in [m for m in expect if m.id]:
+        yield assert_in, expect_msg.id, [m.id for m in actual if m.id]
 
 
 @gen_with_intl_app('html', freshenv=True)
@@ -452,7 +487,7 @@ def test_xml_builder(app, status, warning):
            None,
            ['ref'])
 
-    warnings = warning.getvalue().replace(os.sep, '/')
+    warnings = getwarning(warning)
     warning_expr = u'.*/footnote.xml:\\d*: SEVERE: Duplicate ID: ".*".\n'
     yield assert_not_re_search, warning_expr, warnings
 
@@ -583,7 +618,7 @@ def test_xml_builder(app, status, warning):
            ['same-type-links', 'i18n-role-xref'])
 
     # warnings
-    warnings = warning.getvalue().replace(os.sep, '/')
+    warnings = getwarning(warning)
     yield assert_not_in, 'term not in glossary', warnings
     yield assert_not_in, 'undefined label', warnings
     yield assert_not_in, 'unknown document', warnings
@@ -645,7 +680,7 @@ def test_xml_builder(app, status, warning):
 def test_additional_targets_should_not_be_translated(app, status, warning):
     app.builder.build_all()
 
-    ## literalblock.txt
+    # [literalblock.txt]
     result = (app.outdir / 'literalblock.html').text(encoding='utf-8')
 
     # title should be translated
@@ -661,17 +696,18 @@ def test_additional_targets_should_not_be_translated(app, status, warning):
     yield assert_count(expected_expr, result, 1)
 
     # C code block with lang should not be translated but be *C* highlighted
-    expected_expr = """<span class="cp">#include &lt;stdio.h&gt;</span>"""
+    expected_expr = ("""<span class="cp">#include</span> """
+                     """<span class="cpf">&lt;stdio.h&gt;</span>""")
     yield assert_count(expected_expr, result, 1)
 
     # doctest block should not be translated but be highlighted
     expected_expr = (
         """<span class="gp">&gt;&gt;&gt; </span>"""
         """<span class="kn">import</span> <span class="nn">sys</span>  """
-        """<span class="c"># sys importing</span>""")
+        """<span class="c1"># sys importing</span>""")
     yield assert_count(expected_expr, result, 1)
 
-    ## raw.txt
+    # [raw.txt]
 
     result = (app.outdir / 'raw.html').text(encoding='utf-8')
 
@@ -679,7 +715,7 @@ def test_additional_targets_should_not_be_translated(app, status, warning):
     expected_expr = """<iframe src="http://sphinx-doc.org"></iframe></div>"""
     yield assert_count(expected_expr, result, 1)
 
-    ## figure.txt
+    # [figure.txt]
 
     result = (app.outdir / 'figure.html').text(encoding='utf-8')
 
@@ -705,7 +741,7 @@ def test_additional_targets_should_not_be_translated(app, status, warning):
 def test_additional_targets_should_be_translated(app, status, warning):
     app.builder.build_all()
 
-    ## literalblock.txt
+    # [literalblock.txt]
     result = (app.outdir / 'literalblock.html').text(encoding='utf-8')
 
     # title should be translated
@@ -721,17 +757,18 @@ def test_additional_targets_should_be_translated(app, status, warning):
     yield assert_count(expected_expr, result, 1)
 
     # C code block with lang should be translated and be *C* highlighted
-    expected_expr = """<span class="cp">#include &lt;STDIO.H&gt;</span>"""
+    expected_expr = ("""<span class="cp">#include</span> """
+                     """<span class="cpf">&lt;STDIO.H&gt;</span>""")
     yield assert_count(expected_expr, result, 1)
 
     # doctest block should not be translated but be highlighted
     expected_expr = (
         """<span class="gp">&gt;&gt;&gt; </span>"""
         """<span class="kn">import</span> <span class="nn">sys</span>  """
-        """<span class="c"># SYS IMPORTING</span>""")
+        """<span class="c1"># SYS IMPORTING</span>""")
     yield assert_count(expected_expr, result, 1)
 
-    ## raw.txt
+    # [raw.txt]
 
     result = (app.outdir / 'raw.html').text(encoding='utf-8')
 
@@ -739,7 +776,7 @@ def test_additional_targets_should_be_translated(app, status, warning):
     expected_expr = """<iframe src="HTTP://SPHINX-DOC.ORG"></iframe></div>"""
     yield assert_count(expected_expr, result, 1)
 
-    ## figure.txt
+    # [figure.txt]
 
     result = (app.outdir / 'figure.html').text(encoding='utf-8')
 
@@ -759,3 +796,91 @@ def test_references(app, status, warning):
     warnings = warning.getvalue().replace(os.sep, '/')
     warning_expr = u'refs.txt:\\d+: ERROR: Unknown target name:'
     yield assert_count(warning_expr, warnings, 0)
+
+
+@with_app(buildername='dummy', testroot='image-glob', confoverrides={'language': 'xx'})
+def test_image_glob_intl(app, status, warning):
+    app.builder.build_all()
+
+    # index.rst
+    doctree = pickle.loads((app.doctreedir / 'index.doctree').bytes())
+
+    assert_node(doctree[0][1], nodes.image, uri='rimg.xx.png',
+                candidates={'*': 'rimg.xx.png'})
+
+    assert isinstance(doctree[0][2], nodes.figure)
+    assert_node(doctree[0][2][0], nodes.image, uri='rimg.xx.png',
+                candidates={'*': 'rimg.xx.png'})
+
+    assert_node(doctree[0][3], nodes.image, uri='img.*',
+                candidates={'application/pdf': 'img.pdf',
+                            'image/gif': 'img.gif',
+                            'image/png': 'img.png'})
+
+    assert isinstance(doctree[0][4], nodes.figure)
+    assert_node(doctree[0][4][0], nodes.image, uri='img.*',
+                candidates={'application/pdf': 'img.pdf',
+                            'image/gif': 'img.gif',
+                            'image/png': 'img.png'})
+
+    # subdir/index.rst
+    doctree = pickle.loads((app.doctreedir / 'subdir/index.doctree').bytes())
+
+    assert_node(doctree[0][1], nodes.image, uri='subdir/rimg.xx.png',
+                candidates={'*': 'subdir/rimg.xx.png'})
+
+    assert_node(doctree[0][2], nodes.image, uri='subdir/svgimg.*',
+                candidates={'application/pdf': 'subdir/svgimg.pdf',
+                            'image/svg+xml': 'subdir/svgimg.xx.svg'})
+
+    assert isinstance(doctree[0][3], nodes.figure)
+    assert_node(doctree[0][3][0], nodes.image, uri='subdir/svgimg.*',
+                candidates={'application/pdf': 'subdir/svgimg.pdf',
+                            'image/svg+xml': 'subdir/svgimg.xx.svg'})
+
+
+@with_app(buildername='dummy', testroot='image-glob',
+          confoverrides={'language': 'xx',
+                         'figure_language_filename': u'{root}{ext}.{language}'})
+def test_image_glob_intl_using_figure_language_filename(app, status, warning):
+    app.builder.build_all()
+
+    # index.rst
+    doctree = pickle.loads((app.doctreedir / 'index.doctree').bytes())
+
+    assert_node(doctree[0][1], nodes.image, uri='rimg.png.xx',
+                candidates={'*': 'rimg.png.xx'})
+
+    assert isinstance(doctree[0][2], nodes.figure)
+    assert_node(doctree[0][2][0], nodes.image, uri='rimg.png.xx',
+                candidates={'*': 'rimg.png.xx'})
+
+    assert_node(doctree[0][3], nodes.image, uri='img.*',
+                candidates={'application/pdf': 'img.pdf',
+                            'image/gif': 'img.gif',
+                            'image/png': 'img.png'})
+
+    assert isinstance(doctree[0][4], nodes.figure)
+    assert_node(doctree[0][4][0], nodes.image, uri='img.*',
+                candidates={'application/pdf': 'img.pdf',
+                            'image/gif': 'img.gif',
+                            'image/png': 'img.png'})
+
+    # subdir/index.rst
+    doctree = pickle.loads((app.doctreedir / 'subdir/index.doctree').bytes())
+
+    assert_node(doctree[0][1], nodes.image, uri='subdir/rimg.png',
+                candidates={'*': 'subdir/rimg.png'})
+
+    assert_node(doctree[0][2], nodes.image, uri='subdir/svgimg.*',
+                candidates={'application/pdf': 'subdir/svgimg.pdf',
+                            'image/svg+xml': 'subdir/svgimg.svg'})
+
+    assert isinstance(doctree[0][3], nodes.figure)
+    assert_node(doctree[0][3][0], nodes.image, uri='subdir/svgimg.*',
+                candidates={'application/pdf': 'subdir/svgimg.pdf',
+                            'image/svg+xml': 'subdir/svgimg.svg'})
+
+
+def getwarning(warnings):
+    return repr_as(warnings.getvalue().replace(os.sep, '/'), '<warnings>')

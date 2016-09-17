@@ -11,20 +11,19 @@
     This is in its own module so that importing it is fast.  It should not
     import the main Sphinx modules (like sphinx.applications, sphinx.builders).
 
-    :copyright: Copyright 2007-2015 by the Sphinx team, see AUTHORS.
+    :copyright: Copyright 2007-2016 by the Sphinx team, see AUTHORS.
     :license: BSD, see LICENSE for details.
 """
 from __future__ import print_function
 
 import os
 import sys
-import shutil
 from os import path
 from subprocess import call
 
 import sphinx
 from sphinx.util.console import bold, blue
-from sphinx.util.osutil import cd
+from sphinx.util.osutil import cd, rmtree
 
 proj_name = os.getenv('SPHINXPROJ', '<project>')
 
@@ -75,7 +74,7 @@ class Make(object):
             return 1
         print("Removing everything under %r..." % self.builddir)
         for item in os.listdir(self.builddir):
-            shutil.rmtree(self.builddir_join(item))
+            rmtree(self.builddir_join(item))
 
     def build_help(self):
         print(bold("Sphinx v%s" % sphinx.__display_version__))

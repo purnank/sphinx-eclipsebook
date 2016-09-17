@@ -16,6 +16,10 @@ There are two additional directives when using this extension:
    It will only show up in the output if :confval:`todo_include_todos` is
    ``True``.
 
+   .. versionadded:: 1.3.2
+      This directive supports an ``class`` option that determines the class attribute
+      for HTML output.  If not given, the class defaults to ``admonition-todo``.
+
 
 .. rst:directive:: todolist
 
@@ -29,3 +33,11 @@ There is also an additional config value:
 
    If this is ``True``, :rst:dir:`todo` and :rst:dir:`todolist` produce output,
    else they produce nothing.  The default is ``False``.
+
+.. confval:: todo_link_only
+
+   If this is ``True``, :rst:dir:`todolist` produce output without file path and line,
+   The default is ``False``.
+
+   .. versionadded:: 1.4
+

@@ -196,6 +196,8 @@ Use ```Link text <http://example.com/>`_`` for inline web links.  If the link
 text should be the web address, you don't need special markup at all, the parser
 finds links and mail addresses in ordinary text.
 
+.. important:: There must be a space between the link text and the opening \< for the URL.
+
 You can also separate the link and the target definition (:duref:`ref
 <hyperlink-targets>`), like this::
 
@@ -223,8 +225,10 @@ as long as the text::
    =================
 
 Normally, there are no heading levels assigned to certain characters as the
-structure is determined from the succession of headings.  However, for the
-Python documentation, this convention is used which you may follow:
+structure is determined from the succession of headings.  However, this
+convention is used in `Python's Style Guide for documentating
+<https://docs.python.org/devguide/documenting.html#style-guide>`_ which you may
+follow:
 
 * ``#`` with overline, for parts
 * ``*`` with overline, for chapters

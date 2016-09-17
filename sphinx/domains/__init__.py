@@ -6,9 +6,11 @@
     Support for domains, which are groupings of description directives
     and roles describing e.g. constructs of one programming language.
 
-    :copyright: Copyright 2007-2015 by the Sphinx team, see AUTHORS.
+    :copyright: Copyright 2007-2016 by the Sphinx team, see AUTHORS.
     :license: BSD, see LICENSE for details.
 """
+
+import copy
 
 from six import iteritems
 
@@ -145,7 +147,7 @@ class Domain(object):
         self.env = env
         if self.name not in env.domaindata:
             assert isinstance(self.initial_data, dict)
-            new_data = self.initial_data.copy()
+            new_data = copy.deepcopy(self.initial_data)
             new_data['version'] = self.data_version
             self.data = env.domaindata[self.name] = new_data
         else:

@@ -3,7 +3,7 @@
     sphinx.directives.other
     ~~~~~~~~~~~~~~~~~~~~~~~
 
-    :copyright: Copyright 2007-2015 by the Sphinx team, see AUTHORS.
+    :copyright: Copyright 2007-2016 by the Sphinx team, see AUTHORS.
     :license: BSD, see LICENSE for details.
 """
 
@@ -405,6 +405,7 @@ class Include(BaseInclude):
             return BaseInclude.run(self)
         rel_filename, filename = env.relfn2path(self.arguments[0])
         self.arguments[0] = filename
+        env.note_included(filename)
         return BaseInclude.run(self)
 
 

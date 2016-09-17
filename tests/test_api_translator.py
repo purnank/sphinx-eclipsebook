@@ -5,7 +5,7 @@
 
     Test the Sphinx API for translator.
 
-    :copyright: Copyright 2007-2015 by the Sphinx team, see AUTHORS.
+    :copyright: Copyright 2007-2016 by the Sphinx team, see AUTHORS.
     :license: BSD, see LICENSE for details.
 """
 
@@ -67,7 +67,7 @@ def test_html_with_set_translator_for_html_and_html_translator_class(
     assert translator_class.__name__ == 'ConfHTMLTranslator'
 
 
-## this test break test_websupport.test_comments test. why?
+# this test break test_websupport.test_comments test. why?
 # @with_app(
 #     buildername='dirhtml',
 #     srcdir=(test_roots / 'test-api-set-translator'),

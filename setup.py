@@ -1,10 +1,5 @@
 # -*- coding: utf-8 -*-
-try:
-    from setuptools import setup, find_packages
-except ImportError:
-    import ez_setup
-    ez_setup.use_setuptools()
-    from setuptools import setup, find_packages
+from setuptools import setup, find_packages
 
 import os
 import sys
@@ -46,19 +41,19 @@ if sys.version_info < (2, 6) or (3, 0) <= sys.version_info < (3, 3):
     sys.exit(1)
 
 requires = [
-    'six>=1.4',
+    'six>=1.5',
     'Jinja2>=2.3',
     'Pygments>=2.0',
     'docutils>=0.11',
     'snowballstemmer>=1.1',
     'babel>=1.3,!=2.0',
     'alabaster>=0.7,<0.8',
-    'sphinx_rtd_theme>=0.1,<2.0',
+    'imagesize',
 ]
 extras_require = {
     # Environment Marker works for wheel 0.24 or later
     ':sys_platform=="win32"': [
-        'colorama',
+        'colorama>=0.3.5',
     ],
     'websupport': [
         'sqlalchemy>=0.9',
@@ -73,7 +68,7 @@ extras_require = {
 
 # for sdist installation with pip-1.5.6
 if sys.platform == 'win32':
-    requires.append('colorama')
+    requires.append('colorama>=0.3.5')
 
 # Provide a "compile_catalog" command that also creates the translated
 # JavaScript files if Babel is available.
@@ -102,6 +97,13 @@ else:
         def run(self):
             compile_catalog.run(self)
 
+            if isinstance(self.domain, list):
+                for domain in self.domain:
+                    self._run_domain_js(domain)
+            else:
+                self._run_domain_js(self.domain)
+
+        def _run_domain_js(self, domain):
             po_files = []
             js_files = []
 
@@ -110,20 +112,20 @@ else:
                     po_files.append((self.locale,
                                      os.path.join(self.directory, self.locale,
                                                   'LC_MESSAGES',
-                                                  self.domain + '.po')))
+                                                  domain + '.po')))
                     js_files.append(os.path.join(self.directory, self.locale,
                                                  'LC_MESSAGES',
-                                                 self.domain + '.js'))
+                                                 domain + '.js'))
                 else:
                     for locale in os.listdir(self.directory):
                         po_file = os.path.join(self.directory, locale,
                                                'LC_MESSAGES',
-                                               self.domain + '.po')
+                                               domain + '.po')
                         if os.path.exists(po_file):
                             po_files.append((locale, po_file))
                             js_files.append(os.path.join(self.directory, locale,
                                                          'LC_MESSAGES',
-                                                         self.domain + '.js'))
+                                                         domain + '.js'))
             else:
                 po_files.append((self.locale, self.input_file))
                 if self.output_file:
@@ -131,7 +133,7 @@ else:
                 else:
                     js_files.append(os.path.join(self.directory, self.locale,
                                                  'LC_MESSAGES',
-                                                 self.domain + '.js'))
+                                                 domain + '.js'))
 
             for js_file, (locale, po_file) in zip(js_files, po_files):
                 infile = open(po_file, 'r')
@@ -162,7 +164,7 @@ else:
                         messages=jscatalog,
                         plural_expr=catalog.plural_expr,
                         locale=str(catalog.locale)
-                    ), outfile)
+                    ), outfile, sort_keys=True)
                     outfile.write(');')
                 finally:
                     outfile.close()

@@ -5,12 +5,13 @@
 
     LaTeX builder.
 
-    :copyright: Copyright 2007-2015 by the Sphinx team, see AUTHORS.
+    :copyright: Copyright 2007-2016 by the Sphinx team, see AUTHORS.
     :license: BSD, see LICENSE for details.
 """
 
 import os
 from os import path
+import warnings
 
 from six import iteritems
 from docutils import nodes
@@ -20,6 +21,7 @@ from docutils.frontend import OptionParser
 
 from sphinx import package_dir, addnodes
 from sphinx.util import texescape
+from sphinx.errors import SphinxError
 from sphinx.locale import _
 from sphinx.builders import Builder
 from sphinx.environment import NoUri
@@ -35,14 +37,28 @@ class LaTeXBuilder(Builder):
     """
     name = 'latex'
     format = 'latex'
-    supported_image_types = ['application/pdf', 'image/png',
-                             'image/gif', 'image/jpeg']
+    supported_image_types = ['application/pdf', 'image/png', 'image/jpeg']
     usepackages = []
 
     def init(self):
         self.docnames = []
         self.document_data = []
         texescape.init()
+        self.check_options()
+
+    def check_options(self):
+        if self.config.latex_toplevel_sectioning not in (None, 'part', 'chapter', 'section'):
+            self.warn('invalid latex_toplevel_sectioning, ignored: %s' %
+                      self.config.latex_top_sectionlevel)
+            self.config.latex_top_sectionlevel = None
+
+        if self.config.latex_use_parts:
+            warnings.warn('latex_use_parts will be removed at Sphinx-1.5. '
+                          'Use latex_toplevel_sectioning instead.',
+                          DeprecationWarning)
+
+            if self.config.latex_toplevel_sectioning:
+                self.warn('latex_use_parts conflicts with latex_toplevel_sectioning, ignored.')
 
     def get_outdated_docs(self):
         return 'all documents'  # for now
@@ -94,9 +110,18 @@ class LaTeXBuilder(Builder):
                 destination_path=path.join(self.outdir, targetname),
                 encoding='utf-8')
             self.info("processing " + targetname + "... ", nonl=1)
+            toctrees = self.env.get_doctree(docname).traverse(addnodes.toctree)
+            if toctrees:
+                if toctrees[0].get('maxdepth') > 0:
+                    tocdepth = toctrees[0].get('maxdepth')
+                else:
+                    tocdepth = None
+            else:
+                tocdepth = None
             doctree = self.assemble_doctree(
                 docname, toctree_only,
                 appendices=((docclass != 'howto') and self.config.latex_appendices or []))
+            doctree['tocdepth'] = tocdepth
             self.post_process_images(doctree)
             self.info("writing... ", nonl=1)
             doctree.settings = docsettings
@@ -112,7 +137,7 @@ class LaTeXBuilder(Builder):
         tree = self.env.get_doctree(indexfile)
         contentsname = None
         for toctree in tree.traverse(addnodes.toctree):
-            if toctree['caption']:
+            if 'caption' in toctree:
                 contentsname = toctree['caption']
                 break
 
@@ -195,4 +220,12 @@ class LaTeXBuilder(Builder):
                          path.join(self.outdir, path.basename(filename)))
             self.info()
 
+        # the logo is handled differently
+        if self.config.latex_logo:
+            logobase = path.basename(self.config.latex_logo)
+            logotarget = path.join(self.outdir, logobase)
+            if not path.isfile(path.join(self.confdir, self.config.latex_logo)):
+                raise SphinxError('logo file %r does not exist' % self.config.latex_logo)
+            elif not path.isfile(logotarget):
+                copyfile(path.join(self.confdir, self.config.latex_logo), logotarget)
         self.info('done')

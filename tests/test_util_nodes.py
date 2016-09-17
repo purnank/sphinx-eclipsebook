@@ -5,7 +5,7 @@
 
     Tests uti.nodes functions.
 
-    :copyright: Copyright 2007-2015 by the Sphinx team, see AUTHORS.
+    :copyright: Copyright 2007-2016 by the Sphinx team, see AUTHORS.
     :license: BSD, see LICENSE for details.
 """
 from textwrap import dedent
@@ -87,7 +87,6 @@ def test_extract_messages():
         nodes.rubric, 1,
     )
 
-
     text = dedent(
         """
         | spam
@@ -99,7 +98,6 @@ def test_extract_messages():
         extract_messages(_get_doctree(text)),
         nodes.line, 2,
     )
-
 
     text = dedent(
         """
@@ -118,7 +116,6 @@ def test_extract_messages():
         nodes.line, 2,
     )
 
-
     text = dedent(
         """
         * | **Title 1**
@@ -136,8 +133,8 @@ def test_extract_messages_without_rawsource():
     """
     Check node.rawsource is fall-backed by using node.astext() value.
 
-    `extract_message` which is used from Sphinx i18n feature drop ``not node.rawsource`` nodes.
-    So, all nodes which want to translate must have ``rawsource`` value.
+    `extract_message` which is used from Sphinx i18n feature drop ``not node.rawsource``
+    nodes. So, all nodes which want to translate must have ``rawsource`` value.
     However, sometimes node.rawsource is not set.
 
     For example: recommonmark-0.2.0 doesn't set rawsource to `paragraph` node.
