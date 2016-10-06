@@ -1707,7 +1707,6 @@ class LaTeXTranslator(nodes.NodeVisitor):
             for id in node.get('ids'):
                 anchor = not self.in_caption
                 self.body += self.hypertarget(id, anchor=anchor)
-
         uri = node.get('refuri', '')
         if not uri and node.get('refid'):
             uri = '%' + self.curfilestack[-1] + '#' + node['refid']
@@ -1718,10 +1717,7 @@ class LaTeXTranslator(nodes.NodeVisitor):
                 if node.get('nolinkurl'):
                     self.body.append('\\nolinkurl{%s}' % self.encode_uri(uri))
                 else:
-#M+
-                    #self.body.append('\\url{%s}' % self.encode_uri(uri))
-                    self.body.append('\\url{%s}' % self.escape_uri(uri))
-#M-
+                    self.body.append('\\url{%s}' % self.encode_uri(uri))
                 raise nodes.SkipNode
             else:
                 self.body.append('\\href{%s}{' % self.encode_uri(uri))
@@ -1734,11 +1730,10 @@ class LaTeXTranslator(nodes.NodeVisitor):
 #           if self.builder.config.latex_show_pagerefs and not \
             if (self.builder.config.latex_show_pagerefs or \
                 self.builder.config.latex_use_cleveref) and not \
-                    self.in_productionlist:
-#M-
-                self.context.append('}} (%s)' % self.hyperpageref(id))
+                    self.in_production_list:
+                self.context.append('}}} (%s)' % self.hyperpageref(id))
             else:
-                self.context.append('}}')
+                self.context.append('}}}')
         elif uri.startswith('%'):
             # references to documents or labels inside documents
             hashindex = uri.find('#')
@@ -2175,10 +2170,10 @@ class LaTeXTranslator(nodes.NodeVisitor):
 #M+
     def escape_uri(self, text):
         # URL for humans and printable pages. Allow URL to break gracefully at specific points
+        # .replace('/', r'/\-')\
         return self.encode_uri(text)\
-            .replace('/', '/\\-')\
-            .replace('&', '&\\-')\
-            .replace('+', '+\\-')\
+            .replace('+', r'+\-')\
+            .replace('&', r'&\-')\
             .replace(r'\textbackslash{}textasciitilde\{\}',r'\textasciitilde{}')\
             .replace('\\textbackslash{}\\', '\\')\
 

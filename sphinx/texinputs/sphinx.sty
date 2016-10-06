@@ -72,7 +72,7 @@
 \definecolor{VerbatimColor}{rgb}{1,1,1}
 \definecolor{VerbatimBorderColor}{rgb}{0,0,0}
 
-% Uncomment these two lines to ignore the paper size and make the page 
+% Uncomment these two lines to ignore the paper size and make the page
 % size more like a typical published manual.
 %\renewcommand{\paperheight}{9in}
 %\renewcommand{\paperwidth}{8.5in}   % typical squarish manual
@@ -284,7 +284,7 @@
     \def\PYGZsh{\discretionary{}{\sphinxafterbreak\char`\#}{\char`\#}}%
     \def\PYGZpc{\discretionary{}{\sphinxafterbreak\char`\%}{\char`\%}}%
     \def\PYGZdl{\discretionary{}{\sphinxafterbreak\char`\$}{\char`\$}}%
-    \def\PYGZhy{\discretionary{\char`\-}{\sphinxafterbreak}{\char`\-}}%
+%X% \def\PYGZhy{\discretionary{\char`\-}{\sphinxafterbreak}{\char`\-}}%
     \def\PYGZsq{\discretionary{}{\sphinxafterbreak\textquotesingle}{\textquotesingle}}%
     \def\PYGZdq{\discretionary{}{\sphinxafterbreak\char`\"}{\char`\"}}%
     \def\PYGZti{\discretionary{\char`\~}{\sphinxafterbreak}{\char`\~}}%
@@ -770,6 +770,8 @@
     \AtBeginShipoutFirst{\special{pdf:tounicode UTF8-UCS2}}
   \fi
 \fi
+
+\usepackage{varioref}%M+ Varioref
 
 % Include hyperref last.
 \RequirePackage[colorlinks,breaklinks,

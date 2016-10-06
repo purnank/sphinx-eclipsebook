@@ -511,7 +511,6 @@ class EpubBuilder(StandaloneHTMLBuilder):
         self.info('writing %s file...' % outname)
         f = codecs.open(path.join(outdir, outname), 'w', 'utf-8')
         try:
-
             f.write(self.mimetype_template)
         finally:
             f.close()

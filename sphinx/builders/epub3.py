@@ -29,7 +29,6 @@ from sphinx.builders.epub import EpubBuilder
 
 # (Fragment) templates from which the metainfo files content.opf, toc.ncx,
 # mimetype, and META-INF/container.xml are created.
-
 # This template section also defines strings that are embedded in the html
 # output but that may be customized by (re-)setting module attributes,
 # e.g. from conf.py.
@@ -52,7 +51,6 @@ NAVIGATION_DOC_TEMPLATE = u'''\
   </body>
 </html>
 '''
-
 
 NAVLIST_TEMPLATE = u'''%(indent)s      <li><a href="%(refuri)s">%(text)s</a></li>'''
 NAVLIST_TEMPLATE_HAS_CHILD = u'''%(indent)s      <li><a href="%(refuri)s">%(text)s</a>'''
@@ -97,10 +95,10 @@ DOCTYPE = u'''<!DOCTYPE html>'''
 
 # The epub3 publisher
 
+
 class Epub3Builder(EpubBuilder):
     """
     Builder that outputs epub3 files.
-
 
     It creates the metainfo files content.opf, nav.xhtml, toc.ncx, mimetype,
     and META-INF/container.xml. Afterwards, all necessary files are zipped to
