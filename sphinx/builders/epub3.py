@@ -3,16 +3,26 @@
     sphinx.builders.epub3
     ~~~~~~~~~~~~~~~~~~~~~
 
-    Build epub3 files.
-    Originally derived from epub.py.
-
     :copyright: Copyright 2007-2015 by the Sphinx team, see AUTHORS.
     :license: BSD, see LICENSE for details.
 """
 
 import codecs
 from os import path
+import os
 from datetime import datetime
+
+import sys
+import zipfile
+from os import path
+
+try:
+    from PIL import Image
+except ImportError:
+    try:
+        import Image
+    except ImportError:
+        Image = None
 
 from sphinx.builders.epub import EpubBuilder
 
@@ -32,7 +42,7 @@ NAVIGATION_DOC_TEMPLATE = u'''\
     <title>%(toc_locale)s</title>
   </head>
   <body>
-    <nav epub:type="toc">
+    <nav epub:type="toc" id="toc">
       <h1>%(toc_locale)s</h1>
       <ol>
 %(navlist)s
@@ -112,9 +122,43 @@ class Epub3Builder(EpubBuilder):
         self.build_mimetype(self.outdir, 'mimetype')
         self.build_container(self.outdir, 'META-INF/container.xml')
         self.build_content(self.outdir, 'content.opf')
+        #self.build_navigation_doc_PGh(self.outdir, 'nav.xhtml')
         self.build_navigation_doc(self.outdir, 'nav.xhtml')
         self.build_toc(self.outdir, 'toc.ncx')
         self.build_epub(self.outdir, self.config.epub_basename + '.epub')
+
+    def build_navigation_doc_PGh(self,outdir,outname):
+        prev_entry = None
+
+        metadata = {}
+        metadata['lang'] = self.esc(self.config.epub_language)
+        metadata['toc_locale'] = self.esc(self._guide_titles['toc'])
+
+        with codecs.open(os.path.join(outdir,outname),"w","utf-8") as nav:
+            nav.write(self._navigation_doc_template_pre % metadata)
+            for n in self.refnodes:
+                cur_entry = n.copy()
+                cur_entry['indent'] = cur_entry['level'] * self._navlist_indent
+                if prev_entry:
+                    if cur_entry['level'] == prev_entry['level']:
+                        nav.write(_navlist_single_entry % prev_entry)
+                    elif cur_entry['level'] > prev_entry['level']:
+                        nav.write(_navlist_entry_parent % prev_entry)
+                    else:
+                        nav.write(_navlist_single_entry % prev_entry)
+                        while cur_entry['level'] < prev_entry['level']:
+                            prev_entry['level'] = prev_entry['level'] - 1
+                            prev_entry['indent'] = prev_entry['level'] * self._navlist_indent
+                            nav.write(_navlist_entry_leave % prev_entry)
+                prev_entry = cur_entry
+            if prev_entry:
+                nav.write(_navlist_single_entry % prev_entry)
+                while 1 < prev_entry['level']:
+                    prev_entry['level'] = prev_entry['level'] - 1
+                    prev_entry['indent'] = prev_entry['level'] * self._navlist_indent
+                    nav.write(_navlist_entry_leave % prev_entry)
+            nav.write(self._navigation_doc_template_post % metadata)
+        self.files.append(outname)
 
     def content_metadata(self, files, spine, guide):
         """Create a dictionary with all metadata for the content.opf

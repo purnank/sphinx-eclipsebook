@@ -1554,6 +1554,24 @@ These options influence LaTeX output.
 
    .. versionadded:: 1.0
 
+.. confval:: latex_use_cleveref
+
+   If true, use cleverref for cross referencing.  Default is ``False``.
+
+   .. versionadded:: 1.3a-eclipsebook
+
+.. confval:: latex_use_varioref
+
+   If true, use varioref for cross referencing.  Default is ``False``.
+
+   .. versionadded:: 1.3a-eclipsebook
+
+.. confval:: latex_use_minitoc
+
+   If true, use minitoc in each chapters.  Default is ``False``.
+
+   .. versionadded:: 1.3a-eclipsebook
+
 .. confval:: latex_show_urls
 
    Control whether to display URL addresses.  This is very useful for printed

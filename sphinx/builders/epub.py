@@ -245,6 +245,9 @@ class EpubBuilder(StandaloneHTMLBuilder):
         name = name.replace('>', '&gt;')
         name = name.replace('"', '&quot;')
         name = name.replace('\'', '&#39;')
+#M+ (Use EPUB in Windows)
+        name = name.replace('\\', '/')
+#M-
         return name
 
     def get_refnodes(self, doctree, result):

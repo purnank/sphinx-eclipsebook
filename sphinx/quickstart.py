@@ -351,6 +351,12 @@ latex_documents = [
 #
 # latex_show_pagerefs = False
 
+# If true, use celverref package for cross referencing
+#latex_use_cleveref = False
+
+# If true, use minitoc package for each chapters
+#latex_use_minitoc = False
+
 # If true, show URL addresses after external links.
 #
 # latex_show_urls = False

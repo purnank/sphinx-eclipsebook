@@ -196,6 +196,12 @@ class LaTeXBuilder(Builder):
                          path.join(self.outdir, dest))
             self.info()
 
+        # the logo is handled differently
+        if self.config.latex_logo:
+            logobase = path.basename(self.config.latex_logo)
+            copyfile(path.join(self.confdir, self.config.latex_logo),
+                     path.join(self.outdir, logobase))
+
         # copy TeX support files from texinputs
         self.info(bold('copying TeX support files...'))
         staticdirname = path.join(package_dir, 'texinputs')
