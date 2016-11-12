@@ -756,15 +756,20 @@ class LaTeXTranslator(nodes.NodeVisitor):
         self.body.append('}')
 
     def visit_topic(self, node):
-        #M+: Force \\vbox to be a bit smaller
         self.in_minipage = 1
+        #M+: Force \\vbox to be a bit smaller
         self.body.append('\\setbox0\\vbox{\\hsize=0.95\\linewidth\n'
                          '\\begin{minipage}{0.9\\linewidth}\n')
-        #self.body.append('\n\\begin{sphinxShadowBox}\n')
+        #M-: Force \\vbox to be a bit smaller
 
     def depart_topic(self, node):
         self.in_minipage = 0
-        self.body.append('\\end{sphinxShadowBox}\n')
+        #M-: Force \\vbox to be a bit smaller
+        self.body.append('\\end{minipage}}\n'
+                         '\\begin{center}\\setlength{\\fboxsep}{5pt}'
+                         '\\shadowbox{\\box0}\\end{center}\n')
+        #M+: Force \\vbox to be a bit smaller
+
     visit_sidebar = visit_topic
     depart_sidebar = depart_topic
 
