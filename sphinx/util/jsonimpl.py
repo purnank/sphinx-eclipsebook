@@ -1,41 +1,46 @@
-# -*- coding: utf-8 -*-
 """
     sphinx.util.jsonimpl
     ~~~~~~~~~~~~~~~~~~~~
 
     JSON serializer implementation wrapper.
 
-    :copyright: Copyright 2007-2016 by the Sphinx team, see AUTHORS.
+    :copyright: Copyright 2007-2019 by the Sphinx team, see AUTHORS.
     :license: BSD, see LICENSE for details.
 """
 
 import json
+import warnings
+from collections import UserString
+from typing import Any, IO
 
-from six import text_type
-from six.moves import UserString
+from sphinx.deprecation import RemovedInSphinx40Warning
+
+
+warnings.warn('sphinx.util.jsonimpl is deprecated',
+              RemovedInSphinx40Warning, stacklevel=2)
 
 
 class SphinxJSONEncoder(json.JSONEncoder):
     """JSONEncoder subclass that forces translation proxies."""
-    def default(self, obj):
+    def default(self, obj: Any) -> str:
         if isinstance(obj, UserString):
-            return text_type(obj)
-        return json.JSONEncoder.default(self, obj)
+            return str(obj)
+        return super().default(obj)
 
 
-def dump(obj, fp, *args, **kwds):
+def dump(obj: Any, fp: IO, *args, **kwds) -> None:
     kwds['cls'] = SphinxJSONEncoder
-    return json.dump(obj, fp, *args, **kwds)
+    json.dump(obj, fp, *args, **kwds)
 
 
-def dumps(obj, *args, **kwds):
+def dumps(obj: Any, *args, **kwds) -> str:
     kwds['cls'] = SphinxJSONEncoder
     return json.dumps(obj, *args, **kwds)
 
 
-def load(*args, **kwds):
+def load(*args, **kwds) -> Any:
     return json.load(*args, **kwds)
 
 
-def loads(*args, **kwds):
+def loads(*args, **kwds) -> Any:
     return json.loads(*args, **kwds)

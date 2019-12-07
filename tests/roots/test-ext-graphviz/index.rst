@@ -19,3 +19,14 @@ Hello |graph| graphviz world
 
 
 .. graphviz:: graph.dot
+
+.. digraph:: bar
+   :align: right
+   :caption: on *right*
+
+   foo -> bar
+
+.. digraph:: foo
+   :align: center
+
+   centered

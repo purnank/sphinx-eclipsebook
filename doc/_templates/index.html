@@ -13,9 +13,8 @@
     Sphinx is a tool that makes it easy to create intelligent and beautiful
     documentation, written by Georg Brandl and licensed under the BSD license.{%endtrans%}</p>
   <p>{%trans%}It was originally created for <a href="https://docs.python.org/">the
-    new Python documentation</a>, and it has excellent facilities for the
-    documentation of Python projects, but C/C++ is already supported as well,
-    and it is planned to add special support for other languages as well.  Of
+    Python documentation</a>, and it has excellent facilities for the
+    documentation of software projects in a range of languages.  Of
     course, this site is also created from reStructuredText sources using
     Sphinx!  The following features should be highlighted:{%endtrans%}
   </p>
@@ -31,7 +30,7 @@
       module indices{%endtrans%}</li>
     <li>{%trans%}<b>Code handling:</b> automatic highlighting using the <a
       href="http://pygments.org">Pygments</a> highlighter{%endtrans%}</li>
-    <li>{%trans path=pathto('extensions')%}<b>Extensions:</b> automatic testing of code snippets, inclusion of
+    <li>{%trans path=pathto('ext/builtins')%}<b>Extensions:</b> automatic testing of code snippets, inclusion of
       docstrings from Python modules (API docs), and
       <a href="{{ path }}#builtin-sphinx-extensions">more</a>{%endtrans%}</li>
     <li>{%trans path=pathto('develop')%}<b>Contributed extensions:</b> more than
@@ -47,26 +46,35 @@
 
   <h2 style="margin-bottom: 0">{%trans%}Documentation{%endtrans%}</h2>
 
-  <table class="contentstable" align="center" style="margin-left: 30px"><tr>
-    <td width="50%">
-      <p class="biglink"><a class="biglink" href="{{ pathto("tutorial") }}">{%trans%}First steps with Sphinx{%endtrans%}</a><br/>
-         <span class="linkdescr">{%trans%}overview of basic tasks{%endtrans%}</span></p>
-      <p class="biglink"><a class="biglink" href="{{ pathto("contents") }}">{%trans%}Contents{%endtrans%}</a><br/>
-         <span class="linkdescr">{%trans%}for a complete overview{%endtrans%}</span></p>
-    </td><td width="50%">
-      <p class="biglink"><a class="biglink" href="{{ pathto("search") }}">{%trans%}Search page{%endtrans%}</a><br/>
-         <span class="linkdescr">{%trans%}search the documentation{%endtrans%}</span></p>
-      <p class="biglink"><a class="biglink" href="{{ pathto("genindex") }}">{%trans%}General Index{%endtrans%}</a><br/>
-         <span class="linkdescr">{%trans%}all functions, classes, terms{%endtrans%}</span></p>
-    </td></tr>
+  <table class="contentstable">
+    <tr>
+      <td>
+        <p class="biglink"><a class="biglink" href="{{ pathto("usage/quickstart") }}">{%trans%}First steps with Sphinx{%endtrans%}</a><br/>
+           <span class="linkdescr">{%trans%}overview of basic tasks{%endtrans%}</span></p>
+      </td><td>
+        {%- if hasdoc('search') %}<p class="biglink"><a class="biglink" href="{{ pathto("search") }}">{%trans%}Search page{%endtrans%}</a><br/>
+           <span class="linkdescr">{%trans%}search the documentation{%endtrans%}</span></p>{%- endif %}
+      </td>
+    </tr><tr>
+      <td>
+        <p class="biglink"><a class="biglink" href="{{ pathto("contents") }}">{%trans%}Contents{%endtrans%}</a><br/>
+           <span class="linkdescr">{%trans%}for a complete overview{%endtrans%}</span></p>
+      </td><td>
+        {%- if hasdoc('genindex') %}<p class="biglink"><a class="biglink" href="{{ pathto("genindex") }}">{%trans%}General Index{%endtrans%}</a><br/>
+           <span class="linkdescr">{%trans%}all functions, classes, terms{%endtrans%}</span></p>{%- endif %}
+      </td>
+    </tr><tr>
+      <td>
+        <p class="biglink"><a class="biglink" href="{{ pathto("changes") }}">{%trans%}Changes{%endtrans%}</a><br/>
+           <span class="linkdescr">{%trans%}release history{%endtrans%}</span></p>
+      </td><td>
+      </td>
+    </tr>
   </table>
 
   <p>{%trans%}
-    You can also download PDF/EPUB versions of the Sphinx documentation:
-    a <a href="http://readthedocs.org/projects/sphinx/downloads/pdf/stable/">PDF version</a> generated from
-    the LaTeX Sphinx produces, and
-    a <a href="http://readthedocs.org/projects/sphinx/downloads/epub/stable/">EPUB version</a>.
-   {%endtrans%}
+    You can also download PDF/EPUB versions of the Sphinx documentation
+    from pop up menu on lower right corner.{%endtrans%}
   </p>
 
   <h2>{%trans%}Examples{%endtrans%}</h2>
@@ -87,7 +95,7 @@
   <p>{%trans%}There is a <a href="http://docs.sphinx-users.jp/">Japanese translation</a>
     of this documentation, thanks to the Japanese Sphinx user group.{%endtrans%}</p>
   <p>{%trans%}A Japanese book about Sphinx has been published by O'Reilly:
-    <a href="http://www.oreilly.co.jp/books/9784873116488/">Sphinxをはじめよう /
+    <a href="https://www.oreilly.co.jp/books/9784873116488/">Sphinxをはじめよう /
       Learning Sphinx</a>.{%endtrans%}</p>
   <!-- <p><img src="{{ pathto("_static/bookcover.png", 1) }}"/></p> -->
 
@@ -95,7 +103,7 @@
   <h2>{%trans%}Hosting{%endtrans%}</h2>
 
   <p>{%trans%}Need a place to host your Sphinx docs?
-    <a href="http://readthedocs.org">readthedocs.org</a> hosts a lot of Sphinx docs
+    <a href="https://readthedocs.org/">readthedocs.org</a> hosts a lot of Sphinx docs
     already, and integrates well with projects' source control.  It also features a
     powerful built-in search that exceeds the possibilities of Sphinx' JavaScript-based
     offline search.{%endtrans%}</p>

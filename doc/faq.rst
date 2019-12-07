@@ -10,34 +10,32 @@ How do I...
 -----------
 
 ... create PDF files without LaTeX?
-   You can use `rst2pdf <https://github.com/rst2pdf/rst2pdf>`_ version 0.12 or
-   greater which comes with built-in Sphinx integration.  See the
-   :ref:`builders` section for details.
+   `rinohtype`_ provides a PDF builder that can be used as a drop-in
+   replacement for the LaTeX builder.
+
+   .. _rinohtype: https://github.com/brechtm/rinohtype
 
 ... get section numbers?
    They are automatic in LaTeX output; for HTML, give a ``:numbered:`` option to
    the :rst:dir:`toctree` directive where you want to start numbering.
 
 ... customize the look of the built HTML files?
-   Use themes, see :doc:`theming`.
+   Use themes, see :doc:`/usage/theming`.
 
 ... add global substitutions or includes?
-   Add them in the :confval:`rst_epilog` config value.
+   Add them in the :confval:`rst_prolog` or :confval:`rst_epilog` config value.
 
 ... display the whole TOC tree in the sidebar?
    Use the :data:`toctree` callable in a custom layout template, probably in the
    ``sidebartoc`` block.
 
 ... write my own extension?
-   See the :ref:`extension tutorial <exttut>`.
+   See the :doc:`/development/tutorials/index`.
 
 ... convert from my existing docs using MoinMoin markup?
    The easiest way is to convert to xhtml, then convert `xhtml to reST`_.
    You'll still need to mark up classes and such, but the headings and code
    examples come through cleanly.
-
-... create HTML slides from Sphinx documents?
-   See the "Hieroglyph" package at https://github.com/nyergler/hieroglyph.
 
 For many more extensions and other contributed stuff, see the sphinx-contrib_
 repository.
@@ -54,7 +52,7 @@ Read the Docs
     Sphinx. They will host sphinx documentation, along with supporting a number
     of other features including version support, PDF generation, and more. The
     `Getting Started
-    <http://read-the-docs.readthedocs.org/en/latest/getting_started.html>`_
+    <https://read-the-docs.readthedocs.io/en/latest/getting_started.html>`_
     guide is a good place to start.
 
 Epydoc
@@ -71,23 +69,23 @@ SCons
 
 PyPI
    Jannis Leidel wrote a `setuptools command
-   <https://pypi.python.org/pypi/Sphinx-PyPI-upload>`_ that automatically
+   <https://pypi.org/project/Sphinx-PyPI-upload/>`_ that automatically
    uploads Sphinx documentation to the PyPI package documentation area at
-   http://pythonhosted.org/.
+   https://pythonhosted.org/.
 
 GitHub Pages
-   Directories starting with underscores are ignored by default which breaks
-   static files in Sphinx.  GitHub's preprocessor can be `disabled
-   <https://github.com/blog/572-bypassing-jekyll-on-github-pages>`_ to support
-   Sphinx HTML output properly.
+   Please add :py:mod:`sphinx.ext.githubpages` to your project.  It allows you
+   to publish your document in GitHub Pages.  It generates helper files for
+   GitHub Pages on building HTML document automatically.
 
 MediaWiki
-   See https://bitbucket.org/kevindunn/sphinx-wiki/wiki/Home, a project by Kevin Dunn.
+   See https://bitbucket.org/kevindunn/sphinx-wiki/wiki/Home, a project by
+   Kevin Dunn.
 
 Google Analytics
    You can use a custom ``layout.html`` template, like this:
 
-   .. code-block:: html+django
+   .. code-block:: html+jinja
 
       {% extends "!layout.html" %}
 
@@ -102,7 +100,7 @@ Google Analytics
 
       {% block footer %}
       {{ super() }}
-      <div class="footer">This page uses <a href="http://analytics.google.com/">
+      <div class="footer">This page uses <a href="https://analytics.google.com/">
       Google Analytics</a> to collect statistics. You can disable it by blocking
       the JavaScript coming from www.google-analytics.com.
       <script type="text/javascript">
@@ -118,7 +116,37 @@ Google Analytics
       {% endblock %}
 
 
-.. _api role: http://git.savannah.gnu.org/cgit/kenozooid.git/tree/doc/extapi.py
+Google Search
+   To replace Sphinx's built-in search function with Google Search, proceed as
+   follows:
+
+   1. Go to https://cse.google.com/cse/all to create the Google Search code
+      snippet.
+
+   2. Copy the code snippet and paste it into ``_templates/searchbox.html`` in
+      your Sphinx project:
+
+      .. code-block:: html+jinja
+
+         <div>
+            <h3>{{ _('Quick search') }}</h3>
+            <script>
+               (function() {
+                  var cx = '......';
+                  var gcse = document.createElement('script');
+                  gcse.type = 'text/javascript';
+                  gcse.async = true;
+                  gcse.src = 'https://cse.google.com/cse.js?cx=' + cx;
+                  var s = document.getElementsByTagName('script')[0];
+                  s.parentNode.insertBefore(gcse, s);
+               })();
+            </script>
+           <gcse:search></gcse:search>
+         </div>
+
+   3. Add ``searchbox.html`` to the :confval:`html_sidebars` configuration value.
+
+.. _api role: https://git.savannah.gnu.org/cgit/kenozooid.git/tree/doc/extapi.py
 .. _xhtml to reST: http://docutils.sourceforge.net/sandbox/xhtml2rest/xhtml2rest.py
 
 
@@ -140,7 +168,7 @@ The following list gives some hints for the creation of epub files:
   are often cut at the right margin.  The default Courier font (or variant) is
   quite wide and you can only display up to 60 characters on a line.  If you
   replace it with a narrower font, you can get more characters on a line.  You
-  may even use `FontForge <http://fontforge.github.io/>`_ and create
+  may even use `FontForge <https://fontforge.github.io/>`_ and create
   narrow variants of some free font.  In my case I get up to 70 characters on a
   line.
 
@@ -148,7 +176,7 @@ The following list gives some hints for the creation of epub files:
 
 * Test the created epubs. You can use several alternatives.  The ones I am aware
   of are Epubcheck_, Calibre_, FBreader_ (although it does not render the CSS),
-  and Bookworm_.  For bookworm you can download the source from
+  and Bookworm_.  For Bookworm, you can download the source from
   https://code.google.com/archive/p/threepress and run your own local server.
 
 * Large floating divs are not displayed properly.
@@ -167,11 +195,45 @@ The following list gives some hints for the creation of epub files:
   :confval:`html_static_path` directory and reference it with its full path in
   the :confval:`epub_cover` config option.
 
-.. _Epubcheck: https://code.google.com/archive/p/epubcheck
-.. _Calibre: http://calibre-ebook.com/
-.. _FBreader: https://fbreader.org/
-.. _Bookworm: http://www.oreilly.com/bookworm/index.html
+* kindlegen_ command can convert from epub3 resulting file to ``.mobi`` file
+  for Kindle. You can get ``yourdoc.mobi`` under ``_build/epub`` after the
+  following command:
 
+  .. code-block:: bash
+
+     $ make epub
+     $ kindlegen _build/epub/yourdoc.epub
+
+  The kindlegen command doesn't accept documents that have section
+  titles surrounding ``toctree`` directive:
+
+  .. code-block:: rst
+
+     Section Title
+     =============
+
+     .. toctree::
+
+        subdocument
+
+     Section After Toc Tree
+     ======================
+
+  kindlegen assumes all documents order in line, but the resulting document
+  has complicated order for kindlegen::
+
+     ``parent.xhtml`` -> ``child.xhtml`` -> ``parent.xhtml``
+
+  If you get the following error, fix your document structure::
+
+     Error(prcgen):E24011: TOC section scope is not included in the parent chapter:(title)
+     Error(prcgen):E24001: The table of content could not be built.
+
+.. _Epubcheck: https://github.com/IDPF/epubcheck
+.. _Calibre: https://calibre-ebook.com/
+.. _FBreader: https://fbreader.org/
+.. _Bookworm: https://www.oreilly.com/bookworm/index.html
+.. _kindlegen: https://www.amazon.com/gp/feature.html?docId=1000765211
 
 .. _texinfo-faq:
 
@@ -205,7 +267,7 @@ The exact behavior of how Emacs displays references is dependent on the variable
 both the ``*note:`` part and the ``target-id``.  This is generally the best way
 to view Sphinx-based documents since they often make frequent use of links and
 do not take this limitation into account.  However, changing this variable
-affects how all Info documents are displayed and most due take this behavior
+affects how all Info documents are displayed and most do take this behavior
 into account.
 
 If you want Emacs to display Info files produced by Sphinx using the value
@@ -245,10 +307,6 @@ The following notes may be helpful if you want to create Texinfo files:
 
 - Links to external Info files can be created using the somewhat official URI
   scheme ``info``.  For example::
-
-     info:Texinfo#makeinfo_options
-
-  which produces:
 
      info:Texinfo#makeinfo_options
 

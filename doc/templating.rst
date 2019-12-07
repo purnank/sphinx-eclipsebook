@@ -62,7 +62,7 @@ following contents::
 
     {% extends "!layout.html" %}
     {% block rootrellink %}
-        <li><a href="http://project.invalid/">Project Homepage</a> &raquo;</li>
+        <li><a href="https://project.invalid/">Project Homepage</a> &raquo;</li>
         {{ super() }}
     {% endblock %}
 
@@ -70,8 +70,8 @@ By prefixing the name of the overridden template with an exclamation mark,
 Sphinx will load the layout template from the underlying HTML theme.
 
 **Important**: If you override a block, call ``{{ super() }}`` somewhere to
-render the block's content in the extended template -- unless you don't want
-that content to show up.
+render the block's original content in the extended template -- unless you
+don't want that content to show up.
 
 
 Working with the builtin templates
@@ -200,10 +200,9 @@ Overriding works like this::
 
       {% set script_files = script_files + ["_static/myscript.js"] %}
 
-.. data:: css_files
+   .. deprecated:: 1.8.0
 
-   Similar to :data:`script_files`, for CSS files.
-
+      Please use ``.Sphinx.add_js_file()`` instead.
 
 Helper Functions
 ~~~~~~~~~~~~~~~~
@@ -233,6 +232,9 @@ them to generate links or output multiply used elements.
 
    Return the rendered relation bar.
 
+.. function:: warning(message)
+
+   Emit a warning message.
 
 Global Variables
 ~~~~~~~~~~~~~~~~
@@ -291,30 +293,12 @@ in the future.
 
    The value of :confval:`master_doc`, for usage with :func:`pathto`.
 
-.. data:: next
-
-   The next document for the navigation.  This variable is either false or has
-   two attributes `link` and `title`.  The title contains HTML markup.  For
-   example, to generate a link to the next page, you can use this snippet::
-
-      {% if next %}
-      <a href="{{ next.link|e }}">{{ next.title }}</a>
-      {% endif %}
-
 .. data:: pagename
 
    The "page name" of the current file, i.e. either the document name if the
    file is generated from a reST source, or the equivalent hierarchical name
-   relative to the output directory (``[directory/]filename_without_extension``).
-
-.. data:: parents
-
-   A list of parent documents for navigation, structured like the :data:`next`
-   item.
-
-.. data:: prev
-
-   Like :data:`next`, but for the previous page.
+   relative to the output directory
+   (``[directory/]filename_without_extension``).
 
 .. data:: project
 
@@ -369,14 +353,58 @@ In documents that are created from source files (as opposed to
 automatically-generated files like the module index, or documents that already
 are in HTML form), these variables are also available:
 
+.. data:: body
+
+   A string containing the content of the page in HTML form as produced by the
+   HTML builder, before the theme is applied.
+
+.. data:: display_toc
+
+   A boolean that is True if the toc contains more than one entry.
+
 .. data:: meta
 
    Document metadata (a dictionary), see :ref:`metadata`.
+
+.. data:: metatags
+
+   A string containing the page's HTML :dudir:`meta` tags.
+
+.. data:: next
+
+   The next document for the navigation.  This variable is either false or has
+   two attributes `link` and `title`.  The title contains HTML markup.  For
+   example, to generate a link to the next page, you can use this snippet::
+
+      {% if next %}
+      <a href="{{ next.link|e }}">{{ next.title }}</a>
+      {% endif %}
+
+
+.. data:: page_source_suffix
+
+   The suffix of the file that was rendered. Since we support a list of
+   :confval:`source_suffix`, this will allow you to properly link to the
+   original source file.
+
+.. data:: parents
+
+   A list of parent documents for navigation, structured like the :data:`next`
+   item.
+
+.. data:: prev
+
+   Like :data:`next`, but for the previous page.
 
 .. data:: sourcename
 
    The name of the copied source file for the current document.  This is only
    nonempty if the :confval:`html_copy_source` value is ``True``.
+   This has empty value on creating automatically-generated files.
+
+.. data:: title
+
+   The page title.
 
 .. data:: toc
 
@@ -400,7 +428,4 @@ are in HTML form), these variables are also available:
    * ``includehidden`` (``False`` by default): if true, the TOC tree will also
      contain hidden entries.
 
-.. data:: page_source_suffix
 
-   The suffix of the file that was rendered. Since we support a list of :confval:`source_suffix`,
-   this will allow you to properly link to the original source file.

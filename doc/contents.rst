@@ -1,3 +1,4 @@
+
 .. _contents:
 
 Sphinx documentation contents
@@ -7,19 +8,25 @@ Sphinx documentation contents
    :maxdepth: 2
 
    intro
-   tutorial
-   invocation
-   rest
-   markup/index
-   domains
-   builders
-   config
-   intl
+
+   usage/installation
+   usage/quickstart
+   usage/restructuredtext/index
+   usage/markdown
+   usage/configuration
+   usage/builders/index
+   usage/extensions/index
+   usage/theming
+   usage/advanced/intl
+   usage/advanced/setuptools
+   usage/advanced/websupport/index
+
+   man/index
    theming
    templating
-   extensions
+   latex
    extdev/index
-   websupport
+   development/tutorials/index
 
    faq
    glossary
@@ -29,10 +36,18 @@ Sphinx documentation contents
    authors
 
 
+
 Indices and tables
 ==================
 
-* :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`
-* :ref:`glossary`
+.. only:: builder_html
+
+   * :ref:`genindex`
+   * :ref:`modindex`
+   * :ref:`search`
+   * :ref:`glossary`
+
+.. only:: not builder_html
+
+   * :ref:`modindex`
+   * :ref:`glossary`

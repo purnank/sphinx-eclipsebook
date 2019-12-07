@@ -10,6 +10,7 @@ Nodes for domain-specific object descriptions
 
 .. autoclass:: desc
 .. autoclass:: desc_signature
+.. autoclass:: desc_signature_line
 .. autoclass:: desc_addname
 .. autoclass:: desc_type
 .. autoclass:: desc_returns
@@ -54,4 +55,3 @@ You should not need to generate the nodes below in extensions.
 .. autoclass:: start_of_file
 .. autoclass:: productionlist
 .. autoclass:: production
-.. autoclass:: termsep

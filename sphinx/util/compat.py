@@ -1,38 +1,75 @@
-# -*- coding: utf-8 -*-
 """
     sphinx.util.compat
     ~~~~~~~~~~~~~~~~~~
 
-    Stuff for docutils compatibility.
+    modules for backward compatibility
 
-    :copyright: Copyright 2007-2016 by the Sphinx team, see AUTHORS.
+    :copyright: Copyright 2007-2019 by the Sphinx team, see AUTHORS.
     :license: BSD, see LICENSE for details.
 """
+
+import sys
 import warnings
+from typing import Any, Dict
 
-from docutils import nodes
-from docutils.parsers.rst import Directive  # noqa
+from docutils.utils import get_source_line
 
-from docutils import __version__ as _du_version
-docutils_version = tuple(int(x) for x in _du_version.split('.')[:2])
+from sphinx import addnodes
+from sphinx.config import Config
+from sphinx.deprecation import RemovedInSphinx30Warning, RemovedInSphinx40Warning
+from sphinx.transforms import SphinxTransform
+from sphinx.util import import_object
+
+if False:
+    # For type annotation
+    from sphinx.application import Sphinx
 
 
-def make_admonition(node_class, name, arguments, options, content, lineno,
-                    content_offset, block_text, state, state_machine):
-    warnings.warn('make_admonition is deprecated, use '
-                  'docutils.parsers.rst.directives.admonitions.BaseAdmonition '
-                  'instead', DeprecationWarning, stacklevel=2)
-    text = '\n'.join(content)
-    admonition_node = node_class(text)
-    if arguments:
-        title_text = arguments[0]
-        textnodes, messages = state.inline_text(title_text, lineno)
-        admonition_node += nodes.title(title_text, '', *textnodes)
-        admonition_node += messages
-        if 'class' in options:
-            classes = options['class']
-        else:
-            classes = ['admonition-' + nodes.make_id(title_text)]
-        admonition_node['classes'] += classes
-    state.nested_parse(content, content_offset, admonition_node)
-    return [admonition_node]
+def deprecate_source_parsers(app: "Sphinx", config: Config) -> None:
+    if config.source_parsers:
+        warnings.warn('The config variable "source_parsers" is deprecated. '
+                      'Please update your extension for the parser and remove the setting.',
+                      RemovedInSphinx30Warning)
+        for suffix, parser in config.source_parsers.items():
+            if isinstance(parser, str):
+                parser = import_object(parser, 'source parser')
+            app.add_source_parser(suffix, parser)
+
+
+def register_application_for_autosummary(app: "Sphinx") -> None:
+    """Register application object to autosummary module.
+
+    Since Sphinx-1.7, documenters and attrgetters are registered into
+    applicaiton object.  As a result, the arguments of
+    ``get_documenter()`` has been changed.  To keep compatibility,
+    this handler registers application object to the module.
+    """
+    if 'sphinx.ext.autosummary' in sys.modules:
+        from sphinx.ext import autosummary
+        autosummary._app = app
+
+
+class IndexEntriesMigrator(SphinxTransform):
+    """Migrating indexentries from old style (4columns) to new style (5columns)."""
+    default_priority = 700
+
+    def apply(self, **kwargs) -> None:
+        for node in self.document.traverse(addnodes.index):
+            for i, entries in enumerate(node['entries']):
+                if len(entries) == 4:
+                    source, line = get_source_line(node)
+                    warnings.warn('An old styled index node found: %r at (%s:%s)' %
+                                  (node, source, line), RemovedInSphinx40Warning)
+                    node['entries'][i] = entries + (None,)
+
+
+def setup(app: "Sphinx") -> Dict[str, Any]:
+    app.add_transform(IndexEntriesMigrator)
+    app.connect('config-inited', deprecate_source_parsers)
+    app.connect('builder-inited', register_application_for_autosummary)
+
+    return {
+        'version': 'builtin',
+        'parallel_read_safe': True,
+        'parallel_write_safe': True,
+    }

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
     test_napoleon
     ~~~~~~~~~~~~~
@@ -6,17 +5,15 @@
     Tests for :mod:`sphinx.ext.napoleon.__init__` module.
 
 
-    :copyright: Copyright 2007-2016 by the Sphinx team, see AUTHORS.
+    :copyright: Copyright 2007-2019 by the Sphinx team, see AUTHORS.
     :license: BSD, see LICENSE for details.
 """
 
 from collections import namedtuple
-from unittest import TestCase
+from unittest import TestCase, mock
 
 from sphinx.application import Sphinx
-from sphinx.ext.napoleon import (_process_docstring, _skip_member, Config,
-                                 setup)
-from util import mock
+from sphinx.ext.napoleon import _process_docstring, _skip_member, Config, setup
 
 
 def _private_doc():
@@ -37,7 +34,7 @@ def __special_undoc__():
     pass
 
 
-class SampleClass(object):
+class SampleClass:
     def _private_doc(self):
         """SampleClass._private_doc.DOCSTRING"""
         pass
@@ -67,6 +64,7 @@ class SampleError(Exception):
 
     def __special_undoc__(self):
         pass
+
 
 SampleNamedTuple = namedtuple('SampleNamedTuple', 'user_id block_type def_id')
 
@@ -122,19 +120,19 @@ class SetupTest(TestCase):
 
 
 class SkipMemberTest(TestCase):
-    def assertSkip(self, what, member, obj, expect_skip, config_name):
-        skip = 'default skip'
+    def assertSkip(self, what, member, obj, expect_default_skip, config_name):
+        skip = True
         app = mock.Mock()
         app.config = Config()
         setattr(app.config, config_name, True)
-        if expect_skip:
-            self.assertEqual(skip, _skip_member(app, what, member, obj, skip,
+        if expect_default_skip:
+            self.assertEqual(None, _skip_member(app, what, member, obj, skip,
                                                 mock.Mock()))
         else:
             self.assertFalse(_skip_member(app, what, member, obj, skip,
                                           mock.Mock()))
         setattr(app.config, config_name, False)
-        self.assertEqual(skip, _skip_member(app, what, member, obj, skip,
+        self.assertEqual(None, _skip_member(app, what, member, obj, skip,
                                             mock.Mock()))
 
     def test_namedtuple(self):

@@ -1,46 +1,59 @@
-# -*- coding: utf-8 -*-
 """
     sphinx.highlighting
     ~~~~~~~~~~~~~~~~~~~
 
     Highlight code blocks using Pygments.
 
-    :copyright: Copyright 2007-2016 by the Sphinx team, see AUTHORS.
+    :copyright: Copyright 2007-2019 by the Sphinx team, see AUTHORS.
     :license: BSD, see LICENSE for details.
 """
 
-from six import text_type
-
-from sphinx.util.pycompat import htmlescape
-from sphinx.util.texescape import tex_hl_escape_map_new
-from sphinx.ext import doctest
+import html
+import warnings
+from functools import partial
+from importlib import import_module
 
 from pygments import highlight
+from pygments.filters import ErrorToken
+from pygments.formatters import HtmlFormatter, LatexFormatter
+from pygments.lexer import Lexer
+from pygments.lexers import get_lexer_by_name, guess_lexer
 from pygments.lexers import PythonLexer, Python3Lexer, PythonConsoleLexer, \
     CLexer, TextLexer, RstLexer
-from pygments.lexers import get_lexer_by_name, guess_lexer
-from pygments.formatters import HtmlFormatter, LatexFormatter
-from pygments.filters import ErrorToken
 from pygments.styles import get_style_by_name
 from pygments.util import ClassNotFound
+
+from sphinx.deprecation import RemovedInSphinx30Warning
+from sphinx.ext import doctest
+from sphinx.locale import __
 from sphinx.pygments_styles import SphinxStyle, NoneStyle
+from sphinx.util import logging
+from sphinx.util.texescape import tex_hl_escape_map_new
 
-lexers = dict(
-    none = TextLexer(stripnl=False),
-    python = PythonLexer(stripnl=False),
-    python3 = Python3Lexer(stripnl=False),
-    pycon = PythonConsoleLexer(stripnl=False),
-    pycon3 = PythonConsoleLexer(python3=True, stripnl=False),
-    rest = RstLexer(stripnl=False),
-    c = CLexer(stripnl=False),
-)
-for _lexer in lexers.values():
-    _lexer.add_filter('raiseonerror')
+if False:
+    # For type annotation
+    from typing import Any, Dict  # NOQA
+    from pygments.formatter import Formatter  # NOQA
+    from pygments.style import Style  # NOQA
 
 
-escape_hl_chars = {ord(u'\\'): u'\\PYGZbs{}',
-                   ord(u'{'): u'\\PYGZob{}',
-                   ord(u'}'): u'\\PYGZcb{}'}
+logger = logging.getLogger(__name__)
+
+lexers = {}  # type: Dict[str, Lexer]
+lexer_classes = {
+    'none': partial(TextLexer, stripnl=False),
+    'python': partial(PythonLexer, stripnl=False),
+    'python3': partial(Python3Lexer, stripnl=False),
+    'pycon': partial(PythonConsoleLexer, stripnl=False),
+    'pycon3': partial(PythonConsoleLexer, python3=True, stripnl=False),
+    'rest': partial(RstLexer, stripnl=False),
+    'c': partial(CLexer, stripnl=False),
+}  # type: Dict[str, Lexer]
+
+
+escape_hl_chars = {ord('\\'): '\\PYGZbs{}',
+                   ord('{'): '\\PYGZob{}',
+                   ord('}'): '\\PYGZcb{}'}
 
 # used if Pygments is available
 # use textcomp quote to get a true single quote
@@ -49,40 +62,52 @@ _LATEX_ADD_STYLES = r'''
 '''
 
 
-class PygmentsBridge(object):
+class PygmentsBridge:
     # Set these attributes if you want to have different Pygments formatters
     # than the default ones.
     html_formatter = HtmlFormatter
     latex_formatter = LatexFormatter
 
-    def __init__(self, dest='html', stylename='sphinx',
-                 trim_doctest_flags=False):
+    def __init__(self, dest='html', stylename='sphinx', trim_doctest_flags=None):
+        # type: (str, str, bool) -> None
         self.dest = dest
-        if stylename is None or stylename == 'sphinx':
-            style = SphinxStyle
-        elif stylename == 'none':
-            style = NoneStyle
-        elif '.' in stylename:
-            module, stylename = stylename.rsplit('.', 1)
-            style = getattr(__import__(module, None, None, ['__name__']),
-                            stylename)
-        else:
-            style = get_style_by_name(stylename)
-        self.trim_doctest_flags = trim_doctest_flags
-        self.formatter_args = {'style': style}
+
+        style = self.get_style(stylename)
+        self.formatter_args = {'style': style}  # type: Dict[str, Any]
         if dest == 'html':
             self.formatter = self.html_formatter
         else:
             self.formatter = self.latex_formatter
             self.formatter_args['commandprefix'] = 'PYG'
 
+        self.trim_doctest_flags = trim_doctest_flags
+        if trim_doctest_flags is not None:
+            warnings.warn('trim_doctest_flags option for PygmentsBridge is now deprecated.',
+                          RemovedInSphinx30Warning, stacklevel=2)
+
+    def get_style(self, stylename):
+        # type: (str) -> Style
+        if stylename is None or stylename == 'sphinx':
+            return SphinxStyle
+        elif stylename == 'none':
+            return NoneStyle
+        elif '.' in stylename:
+            module, stylename = stylename.rsplit('.', 1)
+            return getattr(import_module(module), stylename)
+        else:
+            return get_style_by_name(stylename)
+
     def get_formatter(self, **kwargs):
+        # type: (Any) -> Formatter
         kwargs.update(self.formatter_args)
         return self.formatter(**kwargs)
 
     def unhighlighted(self, source):
+        # type: (str) -> str
+        warnings.warn('PygmentsBridge.unhighlighted() is now deprecated.',
+                      RemovedInSphinx30Warning, stacklevel=2)
         if self.dest == 'html':
-            return '<pre>' + htmlescape(source) + '</pre>\n'
+            return '<pre>' + html.escape(source) + '</pre>\n'
         else:
             # first, escape highlighting characters like Pygments does
             source = source.translate(escape_hl_chars)
@@ -91,41 +116,56 @@ class PygmentsBridge(object):
             return '\\begin{Verbatim}[commandchars=\\\\\\{\\}]\n' + \
                    source + '\\end{Verbatim}\n'
 
-    def highlight_block(self, source, lang, opts=None, warn=None, force=False, **kwargs):
-        if not isinstance(source, text_type):
-            source = source.decode()
+    def get_lexer(self, source, lang, opts=None, force=False, location=None):
+        # type: (str, str, Dict, bool, Any) -> Lexer
+        if not opts:
+            opts = {}
 
         # find out which lexer to use
         if lang in ('py', 'python'):
             if source.startswith('>>>'):
                 # interactive session
-                lexer = lexers['pycon']
+                lang = 'pycon'
             else:
-                lexer = lexers['python']
+                lang = 'python'
         elif lang in ('py3', 'python3', 'default'):
             if source.startswith('>>>'):
-                lexer = lexers['pycon3']
+                lang = 'pycon3'
             else:
-                lexer = lexers['python3']
+                lang = 'python3'
         elif lang == 'guess':
             try:
                 lexer = guess_lexer(source)
             except Exception:
                 lexer = lexers['none']
+
+        if lang in lexers:
+            # just return custom lexers here (without installing raiseonerror filter)
+            return lexers[lang]
+        elif lang in lexer_classes:
+            lexer = lexer_classes[lang](**opts)
         else:
-            if lang in lexers:
-                lexer = lexers[lang]
-            else:
-                try:
-                    lexer = lexers[lang] = get_lexer_by_name(lang, **(opts or {}))
-                except ClassNotFound:
-                    if warn:
-                        warn('Pygments lexer name %r is not known' % lang)
-                        lexer = lexers['none']
-                    else:
-                        raise
+            try:
+                if lang == 'guess':
+                    lexer = guess_lexer(lang, **opts)
                 else:
-                    lexer.add_filter('raiseonerror')
+                    lexer = get_lexer_by_name(lang, **opts)
+            except ClassNotFound:
+                logger.warning(__('Pygments lexer name %r is not known'), lang,
+                               location=location)
+                lexer = lexer_classes['none'](**opts)
+
+        if not force:
+            lexer.add_filter('raiseonerror')
+
+        return lexer
+
+    def highlight_block(self, source, lang, opts=None, force=False, location=None, **kwargs):
+        # type: (str, str, Dict, bool, Any, Any) -> str
+        if not isinstance(source, str):
+            source = source.decode()
+
+        lexer = self.get_lexer(source, lang, opts, force, location)
 
         # trim doctest options if wanted
         if isinstance(lexer, PythonConsoleLexer) and self.trim_doctest_flags:
@@ -136,25 +176,26 @@ class PygmentsBridge(object):
         formatter = self.get_formatter(**kwargs)
         try:
             hlsource = highlight(source, lexer, formatter)
-        except ErrorToken as exc:
+        except ErrorToken:
             # this is most probably not the selected language,
             # so let it pass unhighlighted
             if lang == 'default':
                 pass  # automatic highlighting failed.
-            elif warn:
-                warn('Could not lex literal_block as "%s". '
-                     'Highlighting skipped.' % lang)
             else:
-                raise exc
-            hlsource = highlight(source, lexers['none'], formatter)
+                logger.warning(__('Could not lex literal_block as "%s". '
+                                  'Highlighting skipped.'), lang,
+                               type='misc', subtype='highlighting_failure',
+                               location=location)
+            lexer = self.get_lexer(source, 'none', opts, force, location)
+            hlsource = highlight(source, lexer, formatter)
+
         if self.dest == 'html':
             return hlsource
         else:
-            if not isinstance(hlsource, text_type):  # Py2 / Pygments < 1.6
-                hlsource = hlsource.decode()
             return hlsource.translate(tex_hl_escape_map_new)
 
     def get_stylesheet(self):
+        # type: () -> str
         formatter = self.get_formatter()
         if self.dest == 'html':
             return formatter.get_style_defs('.highlight')

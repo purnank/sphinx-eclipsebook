@@ -1,27 +1,36 @@
-# -*- coding: utf-8 -*-
 """
     sphinx.domains.c
     ~~~~~~~~~~~~~~~~
 
     The C language domain.
 
-    :copyright: Copyright 2007-2016 by the Sphinx team, see AUTHORS.
+    :copyright: Copyright 2007-2019 by the Sphinx team, see AUTHORS.
     :license: BSD, see LICENSE for details.
 """
 
 import re
 import string
+from typing import Any, Dict, Iterator, List, Tuple
+from typing import cast
 
 from docutils import nodes
+from docutils.nodes import Element
 
 from sphinx import addnodes
-from sphinx.roles import XRefRole
-from sphinx.locale import l_, _
-from sphinx.domains import Domain, ObjType
+from sphinx.addnodes import pending_xref, desc_signature
+from sphinx.application import Sphinx
+from sphinx.builders import Builder
 from sphinx.directives import ObjectDescription
-from sphinx.util.nodes import make_refnode
+from sphinx.domains import Domain, ObjType
+from sphinx.environment import BuildEnvironment
+from sphinx.locale import _, __
+from sphinx.roles import XRefRole
+from sphinx.util import logging
 from sphinx.util.docfields import Field, TypedField
+from sphinx.util.nodes import make_refnode
 
+
+logger = logging.getLogger(__name__)
 
 # RE to split at word boundaries
 wsplit_re = re.compile(r'(\W+)')
@@ -55,39 +64,38 @@ class CObject(ObjectDescription):
     """
 
     doc_field_types = [
-        TypedField('parameter', label=l_('Parameters'),
+        TypedField('parameter', label=_('Parameters'),
                    names=('param', 'parameter', 'arg', 'argument'),
                    typerolename='type', typenames=('type',)),
-        Field('returnvalue', label=l_('Returns'), has_arg=False,
+        Field('returnvalue', label=_('Returns'), has_arg=False,
               names=('returns', 'return')),
-        Field('returntype', label=l_('Return type'), has_arg=False,
+        Field('returntype', label=_('Return type'), has_arg=False,
               names=('rtype',)),
     ]
 
     # These C types aren't described anywhere, so don't try to create
     # a cross-reference to them
-    stopwords = set((
+    stopwords = {
         'const', 'void', 'char', 'wchar_t', 'int', 'short',
         'long', 'float', 'double', 'unsigned', 'signed', 'FILE',
         'clock_t', 'time_t', 'ptrdiff_t', 'size_t', 'ssize_t',
         'struct', '_Bool',
-    ))
+    }
 
-    def _parse_type(self, node, ctype):
+    def _parse_type(self, node: Element, ctype: str) -> None:
         # add cross-ref nodes for all words
         for part in [_f for _f in wsplit_re.split(ctype) if _f]:
             tnode = nodes.Text(part, part)
-            if part[0] in string.ascii_letters+'_' and \
+            if part[0] in string.ascii_letters + '_' and \
                part not in self.stopwords:
-                pnode = addnodes.pending_xref(
-                    '', refdomain='c', reftype='type', reftarget=part,
-                    modname=None, classname=None)
+                pnode = pending_xref('', refdomain='c', reftype='type', reftarget=part,
+                                     modname=None, classname=None)
                 pnode += tnode
                 node += pnode
             else:
                 node += tnode
 
-    def _parse_arglist(self, arglist):
+    def _parse_arglist(self, arglist: str) -> Iterator[str]:
         while True:
             m = c_funcptr_arg_sig_re.match(arglist)
             if m:
@@ -105,7 +113,7 @@ class CObject(ObjectDescription):
                     yield arglist
                     break
 
-    def handle_signature(self, sig, signode):
+    def handle_signature(self, sig: str, signode: desc_signature) -> str:
         """Transform a C signature into RST nodes."""
         # first try the function pointer signature regex, it's more specific
         m = c_funcptr_sig_re.match(sig)
@@ -115,8 +123,9 @@ class CObject(ObjectDescription):
             raise ValueError('no match')
         rettype, name, arglist, const = m.groups()
 
-        signode += addnodes.desc_type('', '')
-        self._parse_type(signode[-1], rettype)
+        desc_type = addnodes.desc_type('', '')
+        signode += desc_type
+        self._parse_type(desc_type, rettype)
         try:
             classname, funcname = name.split('::', 1)
             classname += '::'
@@ -137,7 +146,8 @@ class CObject(ObjectDescription):
             fullname = name
 
         if not arglist:
-            if self.objtype == 'function':
+            if self.objtype == 'function' or \
+                    self.objtype == 'macro' and sig.rstrip().endswith('()'):
                 # for functions, add an empty parameter list
                 signode += addnodes.desc_parameterlist()
             if const:
@@ -162,7 +172,7 @@ class CObject(ObjectDescription):
                     ctype, argname = arg.rsplit(' ', 1)
                     self._parse_type(param, ctype)
                     # separate by non-breaking space in the output
-                    param += nodes.emphasis(' '+argname, u'\xa0'+argname)
+                    param += nodes.emphasis(' ' + argname, '\xa0' + argname)
             except ValueError:
                 # no argument name given, only the type
                 self._parse_type(param, arg)
@@ -172,7 +182,7 @@ class CObject(ObjectDescription):
             signode += addnodes.desc_addname(const, const)
         return fullname
 
-    def get_index_text(self, name):
+    def get_index_text(self, name: str) -> str:
         if self.objtype == 'function':
             return _('%s (C function)') % name
         elif self.objtype == 'member':
@@ -186,7 +196,7 @@ class CObject(ObjectDescription):
         else:
             return ''
 
-    def add_target_and_index(self, name, sig, signode):
+    def add_target_and_index(self, name: str, sig: str, signode: desc_signature) -> None:
         # for C API items we add a prefix since names are usually not qualified
         # by a module name and so easily clash with e.g. section titles
         targetname = 'c.' + name
@@ -195,33 +205,30 @@ class CObject(ObjectDescription):
             signode['ids'].append(targetname)
             signode['first'] = (not self.names)
             self.state.document.note_explicit_target(signode)
-            inv = self.env.domaindata['c']['objects']
-            if name in inv:
-                self.state_machine.reporter.warning(
-                    'duplicate C object description of %s, ' % name +
-                    'other instance in ' + self.env.doc2path(inv[name][0]),
-                    line=self.lineno)
-            inv[name] = (self.env.docname, self.objtype)
+
+            domain = cast(CDomain, self.env.get_domain('c'))
+            domain.note_object(name, self.objtype)
 
         indextext = self.get_index_text(name)
         if indextext:
             self.indexnode['entries'].append(('single', indextext,
                                               targetname, '', None))
 
-    def before_content(self):
+    def before_content(self) -> None:
         self.typename_set = False
         if self.name == 'c:type':
             if self.names:
                 self.env.ref_context['c:type'] = self.names[0]
                 self.typename_set = True
 
-    def after_content(self):
+    def after_content(self) -> None:
         if self.typename_set:
             self.env.ref_context.pop('c:type', None)
 
 
 class CXRefRole(XRefRole):
-    def process_link(self, env, refnode, has_explicit_title, title, target):
+    def process_link(self, env: BuildEnvironment, refnode: Element,
+                     has_explicit_title: bool, title: str, target: str) -> Tuple[str, str]:
         if not has_explicit_title:
             target = target.lstrip('~')  # only has a meaning for the title
             # if the first character is a tilde, don't display the module/class
@@ -230,7 +237,7 @@ class CXRefRole(XRefRole):
                 title = title[1:]
                 dot = title.rfind('.')
                 if dot != -1:
-                    title = title[dot+1:]
+                    title = title[dot + 1:]
         return title, target
 
 
@@ -239,11 +246,11 @@ class CDomain(Domain):
     name = 'c'
     label = 'C'
     object_types = {
-        'function': ObjType(l_('function'), 'func'),
-        'member':   ObjType(l_('member'),   'member'),
-        'macro':    ObjType(l_('macro'),    'macro'),
-        'type':     ObjType(l_('type'),     'type'),
-        'var':      ObjType(l_('variable'), 'data'),
+        'function': ObjType(_('function'), 'func'),
+        'member':   ObjType(_('member'),   'member'),
+        'macro':    ObjType(_('macro'),    'macro'),
+        'type':     ObjType(_('type'),     'type'),
+        'var':      ObjType(_('variable'), 'data'),
     }
 
     directives = {
@@ -262,43 +269,68 @@ class CDomain(Domain):
     }
     initial_data = {
         'objects': {},  # fullname -> docname, objtype
-    }
+    }  # type: Dict[str, Dict[str, Tuple[str, Any]]]
 
-    def clear_doc(self, docname):
-        for fullname, (fn, _l) in list(self.data['objects'].items()):
+    @property
+    def objects(self) -> Dict[str, Tuple[str, str]]:
+        return self.data.setdefault('objects', {})  # fullname -> docname, objtype
+
+    def note_object(self, name: str, objtype: str, location: Any = None) -> None:
+        if name in self.objects:
+            docname = self.objects[name][0]
+            logger.warning(__('duplicate C object description of %s, '
+                              'other instance in %s, use :noindex: for one of them'),
+                           name, docname, location=location)
+        self.objects[name] = (self.env.docname, objtype)
+
+    def clear_doc(self, docname: str) -> None:
+        for fullname, (fn, _l) in list(self.objects.items()):
             if fn == docname:
-                del self.data['objects'][fullname]
+                del self.objects[fullname]
 
-    def merge_domaindata(self, docnames, otherdata):
+    def merge_domaindata(self, docnames: List[str], otherdata: Dict) -> None:
         # XXX check duplicates
         for fullname, (fn, objtype) in otherdata['objects'].items():
             if fn in docnames:
                 self.data['objects'][fullname] = (fn, objtype)
 
-    def resolve_xref(self, env, fromdocname, builder,
-                     typ, target, node, contnode):
+    def resolve_xref(self, env: BuildEnvironment, fromdocname: str, builder: Builder,
+                     typ: str, target: str, node: pending_xref, contnode: Element
+                     ) -> Element:
         # strip pointer asterisk
         target = target.rstrip(' *')
         # becase TypedField can generate xrefs
         if target in CObject.stopwords:
             return contnode
-        if target not in self.data['objects']:
+        if target not in self.objects:
             return None
-        obj = self.data['objects'][target]
+        obj = self.objects[target]
         return make_refnode(builder, fromdocname, obj[0], 'c.' + target,
                             contnode, target)
 
-    def resolve_any_xref(self, env, fromdocname, builder, target,
-                         node, contnode):
+    def resolve_any_xref(self, env: BuildEnvironment, fromdocname: str, builder: Builder,
+                         target: str, node: pending_xref, contnode: Element
+                         ) -> List[Tuple[str, Element]]:
         # strip pointer asterisk
         target = target.rstrip(' *')
-        if target not in self.data['objects']:
+        if target not in self.objects:
             return []
-        obj = self.data['objects'][target]
+        obj = self.objects[target]
         return [('c:' + self.role_for_objtype(obj[1]),
                  make_refnode(builder, fromdocname, obj[0], 'c.' + target,
                               contnode, target))]
 
-    def get_objects(self):
-        for refname, (docname, type) in list(self.data['objects'].items()):
+    def get_objects(self) -> Iterator[Tuple[str, str, str, str, str, int]]:
+        for refname, (docname, type) in list(self.objects.items()):
             yield (refname, refname, type, docname, 'c.' + refname, 1)
+
+
+def setup(app: Sphinx) -> Dict[str, Any]:
+    app.add_domain(CDomain)
+
+    return {
+        'version': 'builtin',
+        'env_version': 1,
+        'parallel_read_safe': True,
+        'parallel_write_safe': True,
+    }

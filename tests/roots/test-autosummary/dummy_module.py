@@ -8,6 +8,7 @@
    C.C2
 """
 
+
 def withSentence():
     '''I have a sentence which
     spans multiple lines. Then I have
@@ -15,12 +16,14 @@ def withSentence():
     '''
     pass
 
+
 def noSentence():
     '''this doesn't start with a
     capital. so it's not considered
     a sentence
     '''
     pass
+
 
 def emptyLine():
     '''This is the real summary
@@ -71,5 +74,5 @@ class C:
         '''
 
 
-def func(arg_):
+def func(arg_, *args, **kwargs):
     """Test function take an argument ended with underscore."""

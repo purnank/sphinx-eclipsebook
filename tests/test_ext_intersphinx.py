@@ -1,134 +1,92 @@
-# -*- coding: utf-8 -*-
 """
     test_intersphinx
     ~~~~~~~~~~~~~~~~
 
     Test the intersphinx extension.
 
-    :copyright: Copyright 2007-2016 by the Sphinx team, see AUTHORS.
+    :copyright: Copyright 2007-2019 by the Sphinx team, see AUTHORS.
     :license: BSD, see LICENSE for details.
 """
 
-import posixpath
+import os
 import unittest
-import zlib
+from io import BytesIO
+from unittest import mock
 
-from six import BytesIO
+import pytest
+import requests
 from docutils import nodes
+from test_util_inventory import inventory_v2, inventory_v2_not_having_version
 
 from sphinx import addnodes
-from sphinx.ext.intersphinx import read_inventory_v1, read_inventory_v2, \
-    load_mappings, missing_reference, _strip_basic_auth, _read_from_url, \
-    _get_safe_url, fetch_inventory, INVENTORY_FILENAME
-
-from util import with_app, with_tempdir, mock
-
-
-inventory_v1 = '''\
-# Sphinx inventory version 1
-# Project: foo
-# Version: 1.0
-module mod foo.html
-module.cls class foo.html
-'''.encode('utf-8')
-
-inventory_v2 = '''\
-# Sphinx inventory version 2
-# Project: foo
-# Version: 2.0
-# The remainder of this file is compressed with zlib.
-'''.encode('utf-8') + zlib.compress('''\
-module1 py:module 0 foo.html#module-module1 Long Module desc
-module2 py:module 0 foo.html#module-$ -
-module1.func py:function 1 sub/foo.html#$ -
-CFunc c:function 2 cfunc.html#CFunc -
-a term std:term -1 glossary.html#term-a-term -
-a term including:colon std:term -1 glossary.html#term-a-term-including-colon -
-'''.encode('utf-8'))
+from sphinx.ext.intersphinx import (
+    load_mappings, missing_reference, normalize_intersphinx_mapping, _strip_basic_auth,
+    _get_safe_url, fetch_inventory, INVENTORY_FILENAME, inspect_main
+)
+from sphinx.ext.intersphinx import setup as intersphinx_setup
 
 
-def test_read_inventory_v1():
-    f = BytesIO(inventory_v1)
-    f.readline()
-    invdata = read_inventory_v1(f, '/util', posixpath.join)
-    assert invdata['py:module']['module'] == \
-        ('foo', '1.0', '/util/foo.html#module-module', '-')
-    assert invdata['py:class']['module.cls'] == \
-        ('foo', '1.0', '/util/foo.html#module.cls', '-')
+def fake_node(domain, type, target, content, **attrs):
+    contnode = nodes.emphasis(content, content)
+    node = addnodes.pending_xref('')
+    node['reftarget'] = target
+    node['reftype'] = type
+    node['refdomain'] = domain
+    node.attributes.update(attrs)
+    node += contnode
+    return node, contnode
 
 
-def test_read_inventory_v2():
-    f = BytesIO(inventory_v2)
-    f.readline()
-    invdata1 = read_inventory_v2(f, '/util', posixpath.join)
-
-    # try again with a small buffer size to test the chunking algorithm
-    f = BytesIO(inventory_v2)
-    f.readline()
-    invdata2 = read_inventory_v2(f, '/util', posixpath.join, bufsize=5)
-
-    assert invdata1 == invdata2
-
-    assert len(invdata1['py:module']) == 2
-    assert invdata1['py:module']['module1'] == \
-        ('foo', '2.0', '/util/foo.html#module-module1', 'Long Module desc')
-    assert invdata1['py:module']['module2'] == \
-        ('foo', '2.0', '/util/foo.html#module-module2', '-')
-    assert invdata1['py:function']['module1.func'][2] == \
-        '/util/sub/foo.html#module1.func'
-    assert invdata1['c:function']['CFunc'][2] == '/util/cfunc.html#CFunc'
-    assert invdata1['std:term']['a term'][2] == \
-        '/util/glossary.html#term-a-term'
-    assert invdata1['std:term']['a term including:colon'][2] == \
-        '/util/glossary.html#term-a-term-including-colon'
+def reference_check(app, *args, **kwds):
+    node, contnode = fake_node(*args, **kwds)
+    return missing_reference(app, app.env, node, contnode)
 
 
-@with_app()
-@mock.patch('sphinx.ext.intersphinx.read_inventory_v2')
+@mock.patch('sphinx.ext.intersphinx.InventoryFile')
 @mock.patch('sphinx.ext.intersphinx._read_from_url')
-def test_fetch_inventory_redirection(app, status, warning, _read_from_url, read_inventory_v2):
-    _read_from_url().readline.return_value = '# Sphinx inventory version 2'.encode('utf-8')
+def test_fetch_inventory_redirection(_read_from_url, InventoryFile, app, status, warning):
+    intersphinx_setup(app)
+    _read_from_url().readline.return_value = '# Sphinx inventory version 2'.encode()
 
     # same uri and inv, not redirected
-    _read_from_url().geturl.return_value = 'http://hostname/' + INVENTORY_FILENAME
+    _read_from_url().url = 'http://hostname/' + INVENTORY_FILENAME
     fetch_inventory(app, 'http://hostname/', 'http://hostname/' + INVENTORY_FILENAME)
     assert 'intersphinx inventory has moved' not in status.getvalue()
-    assert read_inventory_v2.call_args[0][1] == 'http://hostname/'
+    assert InventoryFile.load.call_args[0][1] == 'http://hostname/'
 
     # same uri and inv, redirected
     status.seek(0)
     status.truncate(0)
-    _read_from_url().geturl.return_value = 'http://hostname/new/' + INVENTORY_FILENAME
+    _read_from_url().url = 'http://hostname/new/' + INVENTORY_FILENAME
 
     fetch_inventory(app, 'http://hostname/', 'http://hostname/' + INVENTORY_FILENAME)
     assert status.getvalue() == ('intersphinx inventory has moved: '
                                  'http://hostname/%s -> http://hostname/new/%s\n' %
                                  (INVENTORY_FILENAME, INVENTORY_FILENAME))
-    assert read_inventory_v2.call_args[0][1] == 'http://hostname/new'
+    assert InventoryFile.load.call_args[0][1] == 'http://hostname/new'
 
     # different uri and inv, not redirected
     status.seek(0)
     status.truncate(0)
-    _read_from_url().geturl.return_value = 'http://hostname/new/' + INVENTORY_FILENAME
+    _read_from_url().url = 'http://hostname/new/' + INVENTORY_FILENAME
 
     fetch_inventory(app, 'http://hostname/', 'http://hostname/new/' + INVENTORY_FILENAME)
     assert 'intersphinx inventory has moved' not in status.getvalue()
-    assert read_inventory_v2.call_args[0][1] == 'http://hostname/'
+    assert InventoryFile.load.call_args[0][1] == 'http://hostname/'
 
     # different uri and inv, redirected
     status.seek(0)
     status.truncate(0)
-    _read_from_url().geturl.return_value = 'http://hostname/other/' + INVENTORY_FILENAME
+    _read_from_url().url = 'http://hostname/other/' + INVENTORY_FILENAME
 
     fetch_inventory(app, 'http://hostname/', 'http://hostname/new/' + INVENTORY_FILENAME)
     assert status.getvalue() == ('intersphinx inventory has moved: '
                                  'http://hostname/new/%s -> http://hostname/other/%s\n' %
                                  (INVENTORY_FILENAME, INVENTORY_FILENAME))
-    assert read_inventory_v2.call_args[0][1] == 'http://hostname/'
+    assert InventoryFile.load.call_args[0][1] == 'http://hostname/'
 
 
-@with_app()
-@with_tempdir
+@pytest.mark.xfail(os.name != 'posix', reason="Path separator mismatch issue")
 def test_missing_reference(tempdir, app, status, warning):
     inv_file = tempdir / 'inventory'
     inv_file.write_bytes(inventory_v2)
@@ -141,52 +99,37 @@ def test_missing_reference(tempdir, app, status, warning):
     app.config.intersphinx_cache_limit = 0
 
     # load the inventory and check if it's done correctly
+    normalize_intersphinx_mapping(app, app.config)
     load_mappings(app)
     inv = app.env.intersphinx_inventory
 
     assert inv['py:module']['module2'] == \
         ('foo', '2.0', 'https://docs.python.org/foo.html#module-module2', '-')
 
-    # create fake nodes and check referencing
-
-    def fake_node(domain, type, target, content, **attrs):
-        contnode = nodes.emphasis(content, content)
-        node = addnodes.pending_xref('')
-        node['reftarget'] = target
-        node['reftype'] = type
-        node['refdomain'] = domain
-        node.attributes.update(attrs)
-        node += contnode
-        return node, contnode
-
-    def reference_check(*args, **kwds):
-        node, contnode = fake_node(*args, **kwds)
-        return missing_reference(app, app.env, node, contnode)
-
     # check resolution when a target is found
-    rn = reference_check('py', 'func', 'module1.func', 'foo')
+    rn = reference_check(app, 'py', 'func', 'module1.func', 'foo')
     assert isinstance(rn, nodes.reference)
     assert rn['refuri'] == 'https://docs.python.org/sub/foo.html#module1.func'
     assert rn['reftitle'] == '(in foo v2.0)'
     assert rn[0].astext() == 'foo'
 
     # create unresolvable nodes and check None return value
-    assert reference_check('py', 'foo', 'module1.func', 'foo') is None
-    assert reference_check('py', 'func', 'foo', 'foo') is None
-    assert reference_check('py', 'func', 'foo', 'foo') is None
+    assert reference_check(app, 'py', 'foo', 'module1.func', 'foo') is None
+    assert reference_check(app, 'py', 'func', 'foo', 'foo') is None
+    assert reference_check(app, 'py', 'func', 'foo', 'foo') is None
 
     # check handling of prefixes
 
     # prefix given, target found: prefix is stripped
-    rn = reference_check('py', 'mod', 'py3k:module2', 'py3k:module2')
+    rn = reference_check(app, 'py', 'mod', 'py3k:module2', 'py3k:module2')
     assert rn[0].astext() == 'module2'
 
     # prefix given, but not in title: nothing stripped
-    rn = reference_check('py', 'mod', 'py3k:module2', 'module2')
+    rn = reference_check(app, 'py', 'mod', 'py3k:module2', 'module2')
     assert rn[0].astext() == 'module2'
 
     # prefix given, but explicit: nothing stripped
-    rn = reference_check('py', 'mod', 'py3k:module2', 'py3k:module2',
+    rn = reference_check(app, 'py', 'mod', 'py3k:module2', 'py3k:module2',
                          refexplicit=True)
     assert rn[0].astext() == 'py3k:module2'
 
@@ -205,21 +148,153 @@ def test_missing_reference(tempdir, app, status, warning):
     assert contnode[0].astext() == 'py3k:unknown'
 
     # check relative paths
-    rn = reference_check('py', 'mod', 'py3krel:module1', 'foo')
+    rn = reference_check(app, 'py', 'mod', 'py3krel:module1', 'foo')
     assert rn['refuri'] == 'py3k/foo.html#module-module1'
 
-    rn = reference_check('py', 'mod', 'py3krelparent:module1', 'foo')
+    rn = reference_check(app, 'py', 'mod', 'py3krelparent:module1', 'foo')
     assert rn['refuri'] == '../../py3k/foo.html#module-module1'
 
-    rn = reference_check('py', 'mod', 'py3krel:module1', 'foo', refdoc='sub/dir/test')
+    rn = reference_check(app, 'py', 'mod', 'py3krel:module1', 'foo', refdoc='sub/dir/test')
     assert rn['refuri'] == '../../py3k/foo.html#module-module1'
 
-    rn = reference_check('py', 'mod', 'py3krelparent:module1', 'foo', refdoc='sub/dir/test')
+    rn = reference_check(app, 'py', 'mod', 'py3krelparent:module1', 'foo',
+                         refdoc='sub/dir/test')
     assert rn['refuri'] == '../../../../py3k/foo.html#module-module1'
 
+    # check refs of standard domain
+    rn = reference_check(app, 'std', 'doc', 'docname', 'docname')
+    assert rn['refuri'] == 'https://docs.python.org/docname.html'
 
-@with_app()
-@with_tempdir
+
+def test_missing_reference_pydomain(tempdir, app, status, warning):
+    inv_file = tempdir / 'inventory'
+    inv_file.write_bytes(inventory_v2)
+    app.config.intersphinx_mapping = {
+        'https://docs.python.org/': inv_file,
+    }
+    app.config.intersphinx_cache_limit = 0
+
+    # load the inventory and check if it's done correctly
+    normalize_intersphinx_mapping(app, app.config)
+    load_mappings(app)
+
+    # no context data
+    kwargs = {}
+    node, contnode = fake_node('py', 'func', 'func', 'func()', **kwargs)
+    rn = missing_reference(app, app.env, node, contnode)
+    assert rn is None
+
+    # py:module context helps to search objects
+    kwargs = {'py:module': 'module1'}
+    node, contnode = fake_node('py', 'func', 'func', 'func()', **kwargs)
+    rn = missing_reference(app, app.env, node, contnode)
+    assert rn.astext() == 'func()'
+
+
+def test_missing_reference_stddomain(tempdir, app, status, warning):
+    inv_file = tempdir / 'inventory'
+    inv_file.write_bytes(inventory_v2)
+    app.config.intersphinx_mapping = {
+        'cmd': ('https://docs.python.org/', inv_file),
+    }
+    app.config.intersphinx_cache_limit = 0
+
+    # load the inventory and check if it's done correctly
+    normalize_intersphinx_mapping(app, app.config)
+    load_mappings(app)
+
+    # no context data
+    kwargs = {}
+    node, contnode = fake_node('std', 'option', '-l', '-l', **kwargs)
+    rn = missing_reference(app, app.env, node, contnode)
+    assert rn is None
+
+    # std:program context helps to search objects
+    kwargs = {'std:program': 'ls'}
+    node, contnode = fake_node('std', 'option', '-l', 'ls -l', **kwargs)
+    rn = missing_reference(app, app.env, node, contnode)
+    assert rn.astext() == 'ls -l'
+
+    # refers inventory by name
+    kwargs = {}
+    node, contnode = fake_node('std', 'option', 'cmd:ls -l', '-l', **kwargs)
+    rn = missing_reference(app, app.env, node, contnode)
+    assert rn.astext() == '-l'
+
+
+@pytest.mark.sphinx('html', testroot='ext-intersphinx-cppdomain')
+def test_missing_reference_cppdomain(tempdir, app, status, warning):
+    inv_file = tempdir / 'inventory'
+    inv_file.write_bytes(inventory_v2)
+    app.config.intersphinx_mapping = {
+        'https://docs.python.org/': inv_file,
+    }
+    app.config.intersphinx_cache_limit = 0
+
+    # load the inventory and check if it's done correctly
+    normalize_intersphinx_mapping(app, app.config)
+    load_mappings(app)
+
+    app.build()
+    html = (app.outdir / 'index.html').text()
+    assert ('<a class="reference external"'
+            ' href="https://docs.python.org/index.html#cpp_foo_bar"'
+            ' title="(in foo v2.0)">'
+            '<code class="xref cpp cpp-class docutils literal notranslate">'
+            '<span class="pre">Bar</span></code></a>' in html)
+    assert ('<a class="reference external"'
+            ' href="https://docs.python.org/index.html#foons"'
+            ' title="(in foo v2.0)">foons</a>' in html)
+    assert ('<a class="reference external"'
+            ' href="https://docs.python.org/index.html#foons_bartype"'
+            ' title="(in foo v2.0)">bartype</a>' in html)
+
+
+def test_missing_reference_jsdomain(tempdir, app, status, warning):
+    inv_file = tempdir / 'inventory'
+    inv_file.write_bytes(inventory_v2)
+    app.config.intersphinx_mapping = {
+        'https://docs.python.org/': inv_file,
+    }
+    app.config.intersphinx_cache_limit = 0
+
+    # load the inventory and check if it's done correctly
+    normalize_intersphinx_mapping(app, app.config)
+    load_mappings(app)
+
+    # no context data
+    kwargs = {}
+    node, contnode = fake_node('js', 'meth', 'baz', 'baz()', **kwargs)
+    rn = missing_reference(app, app.env, node, contnode)
+    assert rn is None
+
+    # js:module and js:object context helps to search objects
+    kwargs = {'js:module': 'foo', 'js:object': 'bar'}
+    node, contnode = fake_node('js', 'meth', 'baz', 'baz()', **kwargs)
+    rn = missing_reference(app, app.env, node, contnode)
+    assert rn.astext() == 'baz()'
+
+
+@pytest.mark.xfail(os.name != 'posix', reason="Path separator mismatch issue")
+def test_inventory_not_having_version(tempdir, app, status, warning):
+    inv_file = tempdir / 'inventory'
+    inv_file.write_bytes(inventory_v2_not_having_version)
+    app.config.intersphinx_mapping = {
+        'https://docs.python.org/': inv_file,
+    }
+    app.config.intersphinx_cache_limit = 0
+
+    # load the inventory and check if it's done correctly
+    normalize_intersphinx_mapping(app, app.config)
+    load_mappings(app)
+
+    rn = reference_check(app, 'py', 'mod', 'module1', 'foo')
+    assert isinstance(rn, nodes.reference)
+    assert rn['refuri'] == 'https://docs.python.org/foo.html#module-module1'
+    assert rn['reftitle'] == '(in foo)'
+    assert rn[0].astext() == 'Long Module desc'
+
+
 def test_load_mappings_warnings(tempdir, app, status, warning):
     """
     load_mappings issues a warning if new-style mapping
@@ -238,8 +313,43 @@ def test_load_mappings_warnings(tempdir, app, status, warning):
 
     app.config.intersphinx_cache_limit = 0
     # load the inventory and check if it's done correctly
+    normalize_intersphinx_mapping(app, app.config)
     load_mappings(app)
     assert warning.getvalue().count('\n') == 1
+
+
+def test_load_mappings_fallback(tempdir, app, status, warning):
+    inv_file = tempdir / 'inventory'
+    inv_file.write_bytes(inventory_v2)
+    app.config.intersphinx_cache_limit = 0
+
+    # connect to invalid path
+    app.config.intersphinx_mapping = {
+        'fallback': ('https://docs.python.org/py3k/', '/invalid/inventory/path'),
+    }
+    normalize_intersphinx_mapping(app, app.config)
+    load_mappings(app)
+    assert "failed to reach any of the inventories" in warning.getvalue()
+
+    rn = reference_check(app, 'py', 'func', 'module1.func', 'foo')
+    assert rn is None
+
+    # clear messages
+    status.truncate(0)
+    warning.truncate(0)
+
+    # add fallbacks to mapping
+    app.config.intersphinx_mapping = {
+        'fallback': ('https://docs.python.org/py3k/', ('/invalid/inventory/path',
+                                                       inv_file)),
+    }
+    normalize_intersphinx_mapping(app, app.config)
+    load_mappings(app)
+    assert "encountered some issues with some of the inventories" in status.getvalue()
+    assert "" == warning.getvalue()
+
+    rn = reference_check(app, 'py', 'func', 'module1.func', 'foo')
+    assert isinstance(rn, nodes.reference)
 
 
 class TestStripBasicAuth(unittest.TestCase):
@@ -248,64 +358,23 @@ class TestStripBasicAuth(unittest.TestCase):
         """basic auth creds stripped from URL containing creds"""
         url = 'https://user:12345@domain.com/project/objects.inv'
         expected = 'https://domain.com/project/objects.inv'
-        actual_url, actual_username, actual_password = _strip_basic_auth(url)
-        self.assertEqual(expected, actual_url)
-        self.assertEqual('user', actual_username)
-        self.assertEqual('12345', actual_password)
+        actual = _strip_basic_auth(url)
+        self.assertEqual(expected, actual)
 
     def test_no_auth(self):
         """url unchanged if param doesn't contain basic auth creds"""
         url = 'https://domain.com/project/objects.inv'
         expected = 'https://domain.com/project/objects.inv'
-        actual_url, actual_username, actual_password = _strip_basic_auth(url)
-        self.assertEqual(expected, actual_url)
-        self.assertEqual(None, actual_username)
-        self.assertEqual(None, actual_password)
+        actual = _strip_basic_auth(url)
+        self.assertEqual(expected, actual)
 
     def test_having_port(self):
         """basic auth creds correctly stripped from URL containing creds even if URL
         contains port"""
         url = 'https://user:12345@domain.com:8080/project/objects.inv'
         expected = 'https://domain.com:8080/project/objects.inv'
-        actual_url, actual_username, actual_password = _strip_basic_auth(url)
-        self.assertEqual(expected, actual_url)
-        self.assertEqual('user', actual_username)
-        self.assertEqual('12345', actual_password)
-
-
-@mock.patch('six.moves.urllib.request.HTTPBasicAuthHandler')
-@mock.patch('six.moves.urllib.request.HTTPPasswordMgrWithDefaultRealm')
-@mock.patch('six.moves.urllib.request.build_opener')
-def test_readfromurl_authed(m_build_opener, m_HTTPPasswordMgrWithDefaultRealm,
-                            m_HTTPBasicAuthHandler):
-    # read from URL containing basic auth creds
-    password_mgr = mock.Mock()
-    m_HTTPPasswordMgrWithDefaultRealm.return_value = password_mgr
-
-    url = 'https://user:12345@domain.com/project/objects.inv'
-    _read_from_url(url)
-
-    m_HTTPPasswordMgrWithDefaultRealm.assert_called_once_with()
-    password_mgr.add_password.assert_called_with(
-        None, 'https://domain.com/project/objects.inv', 'user', '12345')
-
-
-@mock.patch('six.moves.urllib.request.HTTPBasicAuthHandler')
-@mock.patch('six.moves.urllib.request.HTTPPasswordMgrWithDefaultRealm')
-@mock.patch('sphinx.ext.intersphinx.default_opener')
-def test_readfromurl_unauthed(m_default_opener, m_HTTPPasswordMgrWithDefaultRealm,
-                              m_HTTPBasicAuthHandler):
-    # read from URL without auth creds
-    password_mgr = mock.Mock()
-    m_HTTPPasswordMgrWithDefaultRealm.return_value = password_mgr
-
-    url = 'https://domain.com/project/objects.inv'
-    _read_from_url(url)
-
-    # assert password manager not created
-    assert m_HTTPPasswordMgrWithDefaultRealm.call_args is None
-    # assert no password added to the password manager
-    assert password_mgr.add_password.call_args is None
+        actual = _strip_basic_auth(url)
+        self.assertEqual(expected, actual)
 
 
 def test_getsafeurl_authed():
@@ -316,9 +385,67 @@ def test_getsafeurl_authed():
     assert expected == actual
 
 
+def test_getsafeurl_authed_having_port():
+    """_get_safe_url() with a url with basic auth having port"""
+    url = 'https://user:12345@domain.com:8080/project/objects.inv'
+    expected = 'https://user@domain.com:8080/project/objects.inv'
+    actual = _get_safe_url(url)
+    assert expected == actual
+
+
 def test_getsafeurl_unauthed():
     """_get_safe_url() with a url without basic auth"""
     url = 'https://domain.com/project/objects.inv'
     expected = 'https://domain.com/project/objects.inv'
     actual = _get_safe_url(url)
     assert expected == actual
+
+
+def test_inspect_main_noargs(capsys):
+    """inspect_main interface, without arguments"""
+    with pytest.raises(SystemExit):
+        inspect_main([])
+
+    expected = (
+        "Print out an inventory file.\n"
+        "Error: must specify local path or URL to an inventory file."
+    )
+    stdout, stderr = capsys.readouterr()
+    assert stdout == ""
+    assert stderr == expected + "\n"
+
+
+def test_inspect_main_file(capsys, tempdir):
+    """inspect_main interface, with file argument"""
+    inv_file = tempdir / 'inventory'
+    inv_file.write_bytes(inventory_v2)
+
+    inspect_main([str(inv_file)])
+
+    stdout, stderr = capsys.readouterr()
+    assert stdout.startswith("c:function\n")
+    assert stderr == ""
+
+
+@mock.patch('requests.get')
+def test_inspect_main_url(fake_get, capsys):
+    """inspect_main interface, with url argument"""
+    raw = BytesIO(inventory_v2)
+    real_read = raw.read
+
+    def fake_read(*args, **kwargs):
+        return real_read()
+
+    raw.read = fake_read
+    url = 'http://hostname/' + INVENTORY_FILENAME
+    resp = requests.Response()
+    resp.status_code = 200
+    resp.url = url
+    resp.raw = raw
+    fake_get.return_value = resp
+
+    inspect_main([url])
+
+    stdout, stderr = capsys.readouterr()
+    assert stdout.startswith("c:function\n")
+    assert stderr == ""

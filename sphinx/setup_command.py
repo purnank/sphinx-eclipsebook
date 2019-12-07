@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
     sphinx.setup_command
     ~~~~~~~~~~~~~~~~~~~~
@@ -8,21 +7,25 @@
 
     :author: Sebastian Wiesner
     :contact: basti.wiesner@gmx.net
-    :copyright: Copyright 2007-2016 by the Sphinx team, see AUTHORS.
+    :copyright: Copyright 2007-2019 by the Sphinx team, see AUTHORS.
     :license: BSD, see LICENSE for details.
 """
-from __future__ import print_function
 
-import sys
 import os
+import sys
 from distutils.cmd import Command
 from distutils.errors import DistutilsOptionError, DistutilsExecError
-
-from six import StringIO, string_types
+from io import StringIO
 
 from sphinx.application import Sphinx
-from sphinx.util.console import darkred, nocolor, color_terminal
+from sphinx.cmd.build import handle_exception
+from sphinx.util.console import nocolor, color_terminal
+from sphinx.util.docutils import docutils_namespace, patch_docutils
 from sphinx.util.osutil import abspath
+
+if False:
+    # For type annotation
+    from typing import Any, Dict  # NOQA
 
 
 class BuildDoc(Command):
@@ -70,7 +73,9 @@ class BuildDoc(Command):
         ('source-dir=', 's', 'Source directory'),
         ('build-dir=', None, 'Build directory'),
         ('config-dir=', 'c', 'Location of the configuration directory'),
-        ('builder=', 'b', 'The builder to use. Defaults to "html"'),
+        ('builder=', 'b', 'The builder (or builders) to use. Can be a comma- '
+         'or space-separated list. Defaults to "html"'),
+        ('warning-is-error', 'W', 'Turn warning into errors'),
         ('project=', None, 'The documented project\'s name'),
         ('version=', None, 'The short X.Y version'),
         ('release=', None, 'The full version, including alpha/beta/rc tags'),
@@ -78,73 +83,88 @@ class BuildDoc(Command):
          'replacement for |today|'),
         ('link-index', 'i', 'Link index.html to the master doc'),
         ('copyright', None, 'The copyright string'),
+        ('pdb', None, 'Start pdb on exception'),
+        ('nitpicky', 'n', 'nit-picky mode, warn about all missing references'),
+        ('keep-going', None, 'With -W, keep going when getting warnings'),
     ]
-    boolean_options = ['fresh-env', 'all-files', 'link-index']
+    boolean_options = ['fresh-env', 'all-files', 'warning-is-error',
+                       'link-index', 'nitpicky']
 
     def initialize_options(self):
+        # type: () -> None
         self.fresh_env = self.all_files = False
-        self.source_dir = self.build_dir = None
+        self.pdb = False
+        self.source_dir = self.build_dir = None  # type: str
         self.builder = 'html'
+        self.warning_is_error = False
         self.project = ''
         self.version = ''
         self.release = ''
         self.today = ''
-        self.config_dir = None
+        self.config_dir = None  # type: str
         self.link_index = False
         self.copyright = ''
+        self.verbosity = 0
+        self.traceback = False
+        self.nitpicky = False
+        self.keep_going = False
 
     def _guess_source_dir(self):
+        # type: () -> str
         for guess in ('doc', 'docs'):
             if not os.path.isdir(guess):
                 continue
             for root, dirnames, filenames in os.walk(guess):
                 if 'conf.py' in filenames:
                     return root
-        return None
+        return os.curdir
 
     # Overriding distutils' Command._ensure_stringlike which doesn't support
     # unicode, causing finalize_options to fail if invoked again. Workaround
-    # for http://bugs.python.org/issue19570
+    # for https://bugs.python.org/issue19570
     def _ensure_stringlike(self, option, what, default=None):
+        # type: (str, str, Any) -> Any
         val = getattr(self, option)
         if val is None:
             setattr(self, option, default)
             return default
-        elif not isinstance(val, string_types):
+        elif not isinstance(val, str):
             raise DistutilsOptionError("'%s' must be a %s (got `%s`)"
                                        % (option, what, val))
         return val
 
     def finalize_options(self):
+        # type: () -> None
+        self.ensure_string_list('builder')
+
         if self.source_dir is None:
             self.source_dir = self._guess_source_dir()
             self.announce('Using source directory %s' % self.source_dir)
+
         self.ensure_dirname('source_dir')
-        if self.source_dir is None:
-            self.source_dir = os.curdir
-        self.source_dir = abspath(self.source_dir)
+
         if self.config_dir is None:
             self.config_dir = self.source_dir
-        self.config_dir = abspath(self.config_dir)
 
         if self.build_dir is None:
             build = self.get_finalized_command('build')
-            self.build_dir = os.path.join(abspath(build.build_base), 'sphinx')
-            self.mkpath(self.build_dir)
-        self.build_dir = abspath(self.build_dir)
+            self.build_dir = os.path.join(abspath(build.build_base), 'sphinx')  # type: ignore
+
         self.doctree_dir = os.path.join(self.build_dir, 'doctrees')
-        self.mkpath(self.doctree_dir)
-        self.builder_target_dir = os.path.join(self.build_dir, self.builder)
-        self.mkpath(self.builder_target_dir)
+
+        self.builder_target_dirs = [
+            (builder, os.path.join(self.build_dir, builder))
+            for builder in self.builder]
 
     def run(self):
+        # type: () -> None
         if not color_terminal():
             nocolor()
-        if not self.verbose:
+        if not self.verbose:  # type: ignore
             status_stream = StringIO()
         else:
-            status_stream = sys.stdout
-        confoverrides = {}
+            status_stream = sys.stdout  # type: ignore
+        confoverrides = {}  # type: Dict[str, Any]
         if self.project:
             confoverrides['project'] = self.project
         if self.version:
@@ -155,26 +175,33 @@ class BuildDoc(Command):
             confoverrides['today'] = self.today
         if self.copyright:
             confoverrides['copyright'] = self.copyright
-        app = Sphinx(self.source_dir, self.config_dir,
-                     self.builder_target_dir, self.doctree_dir,
-                     self.builder, confoverrides, status_stream,
-                     freshenv=self.fresh_env)
+        if self.nitpicky:
+            confoverrides['nitpicky'] = self.nitpicky
 
-        try:
-            app.build(force_all=self.all_files)
-            if app.statuscode:
-                raise DistutilsExecError(
-                    'caused by %s builder.' % app.builder.name)
-        except Exception as err:
-            from docutils.utils import SystemMessage
-            if isinstance(err, SystemMessage):
-                print(darkred('reST markup error:'), file=sys.stderr)
-                print(err.args[0].encode('ascii', 'backslashreplace'),
-                      file=sys.stderr)
-            else:
-                raise
+        for builder, builder_target_dir in self.builder_target_dirs:
+            app = None
 
-        if self.link_index:
-            src = app.config.master_doc + app.builder.out_suffix
-            dst = app.builder.get_outfilename('index')
+            try:
+                confdir = self.config_dir or self.source_dir
+                with patch_docutils(confdir), docutils_namespace():
+                    app = Sphinx(self.source_dir, self.config_dir,
+                                 builder_target_dir, self.doctree_dir,
+                                 builder, confoverrides, status_stream,
+                                 freshenv=self.fresh_env,
+                                 warningiserror=self.warning_is_error,
+                                 keep_going=self.keep_going)
+                    app.build(force_all=self.all_files)
+                    if app.statuscode:
+                        raise DistutilsExecError(
+                            'caused by %s builder.' % app.builder.name)
+            except Exception as exc:
+                handle_exception(app, self, exc, sys.stderr)
+                if not self.pdb:
+                    raise SystemExit(1)
+
+            if not self.link_index:
+                continue
+
+            src = app.config.master_doc + app.builder.out_suffix  # type: ignore
+            dst = app.builder.get_outfilename('index')  # type: ignore
             os.symlink(src, dst)

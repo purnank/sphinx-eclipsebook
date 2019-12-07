@@ -1,22 +1,23 @@
-# -*- coding: utf-8 -*-
 """
     test_util_nodes
     ~~~~~~~~~~~~~~~
 
     Tests uti.nodes functions.
 
-    :copyright: Copyright 2007-2016 by the Sphinx team, see AUTHORS.
+    :copyright: Copyright 2007-2019 by the Sphinx team, see AUTHORS.
     :license: BSD, see LICENSE for details.
 """
 from textwrap import dedent
+from typing import Any
 
+import pytest
+from docutils import frontend
 from docutils import nodes
 from docutils.parsers import rst
 from docutils.utils import new_document
-from docutils import frontend
 
-from sphinx.util.nodes import extract_messages
 from sphinx.transforms import ApplySourceWorkaround
+from sphinx.util.nodes import NodeMatcher, extract_messages, clean_astext, split_explicit_title
 
 
 def _transform(doctree):
@@ -49,84 +50,99 @@ def assert_node_count(messages, node_type, expect_count):
         % (node_type, node_list, count, expect_count))
 
 
-def test_extract_messages():
-    text = dedent(
-        """
-        .. admonition:: admonition title
+def test_NodeMatcher():
+    doctree = nodes.document(None, None)
+    doctree += nodes.paragraph('', 'Hello')
+    doctree += nodes.paragraph('', 'Sphinx', block=1)
+    doctree += nodes.paragraph('', 'World', block=2)
+    doctree += nodes.literal_block('', 'blah blah blah', block=3)
 
-           admonition body
-        """
-    )
-    yield (
-        assert_node_count,
-        extract_messages(_get_doctree(text)),
-        nodes.title, 1,
-    )
+    # search by node class
+    matcher = NodeMatcher(nodes.paragraph)
+    assert len(doctree.traverse(matcher)) == 3
 
-    text = dedent(
-        """
-        .. figure:: foo.jpg
+    # search by multiple node classes
+    matcher = NodeMatcher(nodes.paragraph, nodes.literal_block)
+    assert len(doctree.traverse(matcher)) == 4
 
-           this is title
-        """
-    )
-    yield (
-        assert_node_count,
-        extract_messages(_get_doctree(text)),
-        nodes.caption, 1,
-    )
+    # search by node attribute
+    matcher = NodeMatcher(block=1)
+    assert len(doctree.traverse(matcher)) == 1
 
-    text = dedent(
-        """
-        .. rubric:: spam
-        """
-    )
-    yield (
-        assert_node_count,
-        extract_messages(_get_doctree(text)),
-        nodes.rubric, 1,
-    )
+    # search by node attribute (Any)
+    matcher = NodeMatcher(block=Any)
+    assert len(doctree.traverse(matcher)) == 3
 
-    text = dedent(
-        """
-        | spam
-        | egg
-        """
-    )
-    yield (
-        assert_node_count,
-        extract_messages(_get_doctree(text)),
-        nodes.line, 2,
-    )
+    # search by both class and attribute
+    matcher = NodeMatcher(nodes.paragraph, block=Any)
+    assert len(doctree.traverse(matcher)) == 2
 
-    text = dedent(
-        """
-        section
-        =======
+    # mismatched
+    matcher = NodeMatcher(nodes.title)
+    assert len(doctree.traverse(matcher)) == 0
 
-        +----------------+
-        | | **Title 1**  |
-        | | Message 1    |
-        +----------------+
-        """
-    )
-    yield (
-        assert_node_count,
-        extract_messages(_get_doctree(text)),
-        nodes.line, 2,
-    )
+    # search with Any does not match to Text node
+    matcher = NodeMatcher(blah=Any)
+    assert len(doctree.traverse(matcher)) == 0
 
-    text = dedent(
-        """
-        * | **Title 1**
-          | Message 1
-        """
-    )
-    yield (
-        assert_node_count,
-        extract_messages(_get_doctree(text)),
-        nodes.line, 2,
-    )
+
+@pytest.mark.parametrize(
+    'rst,node_cls,count',
+    [
+        (
+            """
+           .. admonition:: admonition title
+
+              admonition body
+           """,
+            nodes.title, 1
+        ),
+        (
+            """
+           .. figure:: foo.jpg
+
+              this is title
+           """,
+            nodes.caption, 1,
+        ),
+        (
+            """
+           .. rubric:: spam
+           """,
+            nodes.rubric, 1,
+        ),
+        (
+            """
+           | spam
+           | egg
+           """,
+            nodes.line, 2,
+        ),
+        (
+            """
+           section
+           =======
+
+           +----------------+
+           | | **Title 1**  |
+           | | Message 1    |
+           +----------------+
+           """,
+            nodes.line, 2,
+        ),
+        (
+            """
+           * | **Title 1**
+             | Message 1
+           """,
+            nodes.line, 2,
+
+        ),
+    ]
+)
+def test_extract_messages(rst, node_cls, count):
+    msg = extract_messages(_get_doctree(dedent(rst)))
+    assert_node_count(msg, node_cls, count)
 
 
 def test_extract_messages_without_rawsource():
@@ -150,3 +166,30 @@ def test_extract_messages_without_rawsource():
     _transform(document)
     assert_node_count(extract_messages(document), nodes.TextElement, 1)
     assert [m for n, m in extract_messages(document)][0], 'text sentence'
+
+
+def test_clean_astext():
+    node = nodes.paragraph(text='hello world')
+    assert 'hello world' == clean_astext(node)
+
+    node = nodes.image(alt='hello world')
+    assert '' == clean_astext(node)
+
+    node = nodes.paragraph(text='hello world')
+    node += nodes.raw('', 'raw text', format='html')
+    assert 'hello world' == clean_astext(node)
+
+
+@pytest.mark.parametrize(
+    'title, expected',
+    [
+        # implicit
+        ('hello', (False, 'hello', 'hello')),
+        # explicit
+        ('hello <world>', (True, 'hello', 'world')),
+        # explicit (title having angle brackets)
+        ('hello <world> <sphinx>', (True, 'hello <world>', 'sphinx')),
+    ]
+)
+def test_split_explicit_target(title, expected):
+    assert expected == split_explicit_title(title)
