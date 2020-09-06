@@ -31,10 +31,13 @@
 <%= fontpkg %>
 <%= textgreek %>
 <%= fncychap %>
+<%= varioref %>
+<%= minitoc %>
 \usepackage<%= sphinxpkgoptions %>{sphinx}
 <%= sphinxsetup %>
 <%= fvset %>
 <%= geometry %>
+<%= extrapackages %>
 
 <%- for name, option in packages %>
 <%- if option %>
@@ -45,6 +48,15 @@
 <%- endfor %>
 
 <%= hyperref %>
+<%= cleveref %>
+<%- for name, option in packages_after_hyperref %>
+<%- if option %>
+\usepackage[<%= option %>]{<%= name %>}
+<%- else %>
+\usepackage{<%= name %>}
+<%- endif %>
+<%- endfor %>
+
 <%= contentsname %>
 \usepackage{sphinxmessages}
 <%= tocdepth %>

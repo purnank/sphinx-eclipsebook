@@ -6,7 +6,7 @@
 
     .. _Devhelp: https://wiki.gnome.org/Apps/Devhelp
 
-    :copyright: Copyright 2007-2019 by the Sphinx team, see AUTHORS.
+    :copyright: Copyright 2007-2020 by the Sphinx team, see AUTHORS.
     :license: BSD, see LICENSE for details.
 """
 
@@ -23,7 +23,10 @@ deprecated_alias('sphinx.builders.devhelp',
                  {
                      'DevhelpBuilder': DevhelpBuilder,
                  },
-                 RemovedInSphinx40Warning)
+                 RemovedInSphinx40Warning,
+                 {
+                     'DevhelpBuilder': 'sphinxcontrib.devhelp.DevhelpBuilder'
+                 })
 
 
 def setup(app: Sphinx) -> Dict[str, Any]:

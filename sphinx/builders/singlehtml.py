@@ -4,7 +4,7 @@
 
     Single HTML builders.
 
-    :copyright: Copyright 2007-2019 by the Sphinx team, see AUTHORS.
+    :copyright: Copyright 2007-2020 by the Sphinx team, see AUTHORS.
     :license: BSD, see LICENSE for details.
 """
 
@@ -67,10 +67,10 @@ class SingleFileHTMLBuilder(StandaloneHTMLBuilder):
             if hashindex >= 0:
                 refnode['refuri'] = fname + refuri[hashindex:]
 
-    def _get_local_toctree(self, docname: str, collapse: bool = True, **kwds) -> str:
-        if 'includehidden' not in kwds:
-            kwds['includehidden'] = False
-        toctree = TocTree(self.env).get_toctree_for(docname, self, collapse, **kwds)
+    def _get_local_toctree(self, docname: str, collapse: bool = True, **kwargs: Any) -> str:
+        if 'includehidden' not in kwargs:
+            kwargs['includehidden'] = False
+        toctree = TocTree(self.env).get_toctree_for(docname, self, collapse, **kwargs)
         if toctree is not None:
             self.fix_refuris(toctree)
         return self.render_partial(toctree)['fragment']
@@ -149,7 +149,7 @@ class SingleFileHTMLBuilder(StandaloneHTMLBuilder):
             'display_toc': display_toc,
         }
 
-    def write(self, *ignored) -> None:
+    def write(self, *ignored: Any) -> None:
         docnames = self.env.all_docs
 
         with progress_message(__('preparing documents')):
@@ -193,7 +193,11 @@ deprecated_alias('sphinx.builders.html',
                  {
                      'SingleFileHTMLBuilder': SingleFileHTMLBuilder,
                  },
-                 RemovedInSphinx40Warning)
+                 RemovedInSphinx40Warning,
+                 {
+                     'SingleFileHTMLBuilder':
+                     'sphinx.builders.singlehtml.SingleFileHTMLBuilder',
+                 })
 
 
 def setup(app: Sphinx) -> Dict[str, Any]:

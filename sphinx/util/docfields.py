@@ -5,7 +5,7 @@
     "Doc fields" are reST field lists in object descriptions that will
     be domain-specifically transformed to a more appealing presentation.
 
-    :copyright: Copyright 2007-2019 by the Sphinx team, see AUTHORS.
+    :copyright: Copyright 2007-2020 by the Sphinx team, see AUTHORS.
     :license: BSD, see LICENSE for details.
 """
 
@@ -224,12 +224,12 @@ class DocFieldTransformer:
         except Exception:
             # for 3rd party extensions directly calls this transformer.
             warnings.warn('DocFieldTransformer expects given directive object is a subclass '
-                          'of ObjectDescription.', RemovedInSphinx40Warning)
+                          'of ObjectDescription.', RemovedInSphinx40Warning, stacklevel=2)
             self.typemap = self.preprocess_fieldtypes(directive.__class__.doc_field_types)
 
     def preprocess_fieldtypes(self, types: List[Field]) -> Dict[str, Tuple[Field, bool]]:
         warnings.warn('DocFieldTransformer.preprocess_fieldtypes() is deprecated.',
-                      RemovedInSphinx40Warning)
+                      RemovedInSphinx40Warning, stacklevel=2)
         typemap = {}
         for fieldtype in types:
             for name in fieldtype.names:

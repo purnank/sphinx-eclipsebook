@@ -4,7 +4,7 @@
 
     Support for NumPy and Google style docstrings.
 
-    :copyright: Copyright 2007-2019 by the Sphinx team, see AUTHORS.
+    :copyright: Copyright 2007-2020 by the Sphinx team, see AUTHORS.
     :license: BSD, see LICENSE for details.
 """
 
@@ -13,6 +13,7 @@ from typing import Any, Dict, List
 from sphinx import __display_version__ as __version__
 from sphinx.application import Sphinx
 from sphinx.ext.napoleon.docstring import GoogleDocstring, NumpyDocstring
+from sphinx.util import inspect
 
 
 class Config:
@@ -40,6 +41,8 @@ class Config:
         napoleon_use_param = True
         napoleon_use_rtype = True
         napoleon_use_keyword = True
+        napoleon_preprocess_types = False
+        napoleon_type_aliases = None
         napoleon_custom_sections = None
 
     .. _Google style:
@@ -235,6 +238,13 @@ class Config:
 
             :returns: *bool* -- True if successful, False otherwise
 
+    napoleon_preprocess_types : :obj:`bool` (Defaults to False)
+        Enable the type preprocessor for numpy style docstrings.
+
+    napoleon_type_aliases : :obj:`dict` (Defaults to None)
+        Add a mapping of strings to string, translating types in numpy
+        style docstrings. Only works if ``napoleon_preprocess_types = True``.
+
     napoleon_custom_sections : :obj:`list` (Defaults to None)
         Add a list of custom sections to include, expanding the list of parsed sections.
 
@@ -262,10 +272,12 @@ class Config:
         'napoleon_use_param': (True, 'env'),
         'napoleon_use_rtype': (True, 'env'),
         'napoleon_use_keyword': (True, 'env'),
+        'napoleon_preprocess_types': (False, 'env'),
+        'napoleon_type_aliases': (None, 'env'),
         'napoleon_custom_sections': (None, 'env')
     }
 
-    def __init__(self, **settings) -> None:
+    def __init__(self, **settings: Any) -> None:
         for name, (default, rebuild) in self._config_values.items():
             setattr(self, name, default)
         for name, value in settings.items():
@@ -438,7 +450,7 @@ def _skip_member(app: Sphinx, what: str, name: str, obj: Any,
                         mod_path = cls_path.split('.')
                         cls = functools.reduce(getattr, mod_path, mod)
                     else:
-                        cls = obj.__globals__[cls_path]
+                        cls = inspect.unwrap(obj).__globals__[cls_path]
                 except Exception:
                     cls_is_owner = False
                 else:

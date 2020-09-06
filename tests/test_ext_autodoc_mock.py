@@ -4,13 +4,14 @@
 
     Test the autodoc extension.
 
-    :copyright: Copyright 2007-2019 by the Sphinx team, see AUTHORS.
+    :copyright: Copyright 2007-2020 by the Sphinx team, see AUTHORS.
     :license: BSD, see LICENSE for details.
 """
 
 import abc
 import sys
 from importlib import import_module
+from typing import TypeVar
 
 import pytest
 
@@ -18,7 +19,7 @@ from sphinx.ext.autodoc.mock import _MockModule, _MockObject, mock
 
 
 def test_MockModule():
-    mock = _MockModule('mocked_module', None)
+    mock = _MockModule('mocked_module')
     assert isinstance(mock.some_attr, _MockObject)
     assert isinstance(mock.some_method, _MockObject)
     assert isinstance(mock.attr1.attr2, _MockObject)
@@ -39,6 +40,7 @@ def test_MockObject():
     assert isinstance(mock.attr1.attr2, _MockObject)
     assert isinstance(mock.attr1.attr2.meth(), _MockObject)
 
+    # subclassing
     class SubClass(mock.SomeClass):
         """docstring of SubClass"""
 
@@ -50,6 +52,16 @@ def test_MockObject():
     assert isinstance(obj, SubClass)
     assert obj.method() == "string"
     assert isinstance(obj.other_method(), SubClass)
+
+    # parametrized type
+    T = TypeVar('T')
+
+    class SubClass2(mock.SomeClass[T]):
+        """docstring of SubClass"""
+
+    obj2 = SubClass2()
+    assert SubClass2.__doc__ == "docstring of SubClass"
+    assert isinstance(obj2, SubClass2)
 
 
 def test_mock():
@@ -96,3 +108,24 @@ def test_abc_MockObject():
     assert isinstance(obj, Base)
     assert isinstance(obj, _MockObject)
     assert isinstance(obj.some_method(), Derived)
+
+
+def test_mock_decorator():
+    mock = _MockObject()
+
+    @mock.function_deco
+    def func():
+        """docstring"""
+
+    class Foo:
+        @mock.method_deco
+        def meth(self):
+            """docstring"""
+
+    @mock.class_deco
+    class Bar:
+        """docstring"""
+
+    assert func.__doc__ == "docstring"
+    assert Foo.meth.__doc__ == "docstring"
+    assert Bar.__doc__ == "docstring"

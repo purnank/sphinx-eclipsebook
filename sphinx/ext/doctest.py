@@ -5,7 +5,7 @@
     Mimic doctest by automatically executing code snippets and checking
     their results.
 
-    :copyright: Copyright 2007-2019 by the Sphinx team, see AUTHORS.
+    :copyright: Copyright 2007-2020 by the Sphinx team, see AUTHORS.
     :license: BSD, see LICENSE for details.
 """
 
@@ -47,7 +47,7 @@ doctestopt_re = re.compile(r'#\s*doctest:.+$', re.MULTILINE)
 
 def doctest_encode(text: str, encoding: str) -> str:
     warnings.warn('doctest_encode() is deprecated.',
-                  RemovedInSphinx40Warning)
+                  RemovedInSphinx40Warning, stacklevel=2)
     return text
 
 
@@ -91,7 +91,7 @@ class TestDirective(SphinxDirective):
                 # convert <BLANKLINE>s to ordinary blank lines for presentation
                 test = code
                 code = blankline_re.sub('', code)
-            if doctestopt_re.search(code):
+            if doctestopt_re.search(code) and 'no-trim-doctest-flags' not in self.options:
                 if not test:
                     test = code
                 code = doctestopt_re.sub('', code)
@@ -151,6 +151,10 @@ class TestDirective(SphinxDirective):
                     line=self.lineno)
         if 'skipif' in self.options:
             node['skipif'] = self.options['skipif']
+        if 'trim-doctest-flags' in self.options:
+            node['trim_flags'] = True
+        elif 'no-trim-doctest-flags' in self.options:
+            node['trim_flags'] = False
         return [node]
 
 
@@ -165,26 +169,32 @@ class TestcleanupDirective(TestDirective):
 class DoctestDirective(TestDirective):
     option_spec = {
         'hide': directives.flag,
+        'no-trim-doctest-flags': directives.flag,
         'options': directives.unchanged,
         'pyversion': directives.unchanged_required,
         'skipif': directives.unchanged_required,
+        'trim-doctest-flags': directives.flag,
     }
 
 
 class TestcodeDirective(TestDirective):
     option_spec = {
         'hide': directives.flag,
+        'no-trim-doctest-flags': directives.flag,
         'pyversion': directives.unchanged_required,
         'skipif': directives.unchanged_required,
+        'trim-doctest-flags': directives.flag,
     }
 
 
 class TestoutputDirective(TestDirective):
     option_spec = {
         'hide': directives.flag,
+        'no-trim-doctest-flags': directives.flag,
         'options': directives.unchanged,
         'pyversion': directives.unchanged_required,
         'skipif': directives.unchanged_required,
+        'trim-doctest-flags': directives.flag,
     }
 
 
@@ -326,7 +336,7 @@ class DocTestBuilder(Builder):
     def finish(self) -> None:
         # write executive summary
         def s(v: int) -> str:
-            return v != 1 and 's' or ''
+            return 's' if v != 1 else ''
         repl = (self.total_tries, s(self.total_tries),
                 self.total_failures, s(self.total_failures),
                 self.setup_failures, s(self.setup_failures),
@@ -523,8 +533,8 @@ Doctest summary
                 self.type = 'single'  # as for ordinary doctests
             else:
                 # testcode and output separate
-                output = code[1] and code[1].code or ''
-                options = code[1] and code[1].options or {}
+                output = code[1].code if code[1] else ''
+                options = code[1].options if code[1] else {}
                 # disable <BLANKLINE> processing as it is not needed
                 options[doctest.DONT_ACCEPT_BLANKLINE] = True
                 # find out if we're testing an exception
