@@ -4,7 +4,7 @@
 
     Utilities for docstring processing.
 
-    :copyright: Copyright 2007-2020 by the Sphinx team, see AUTHORS.
+    :copyright: Copyright 2007-2021 by the Sphinx team, see AUTHORS.
     :license: BSD, see LICENSE for details.
 """
 
@@ -17,14 +17,13 @@ from docutils.parsers.rst.states import Body
 
 from sphinx.deprecation import RemovedInSphinx50Warning
 
-
 field_list_item_re = re.compile(Body.patterns['field_marker'])
 
 
 def extract_metadata(s: str) -> Dict[str, str]:
     """Extract metadata from docstring."""
     in_other_element = False
-    metadata = {}  # type: Dict[str, str]
+    metadata: Dict[str, str] = {}
 
     if not s:
         return metadata

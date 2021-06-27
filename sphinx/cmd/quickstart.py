@@ -4,20 +4,18 @@
 
     Quickly setup documentation source to work with Sphinx.
 
-    :copyright: Copyright 2007-2020 by the Sphinx team, see AUTHORS.
+    :copyright: Copyright 2007-2021 by the Sphinx team, see AUTHORS.
     :license: BSD, see LICENSE for details.
 """
 
 import argparse
 import locale
 import os
-import re
 import sys
 import time
-import warnings
 from collections import OrderedDict
 from os import path
-from typing import Any, Callable, Dict, List, Pattern, Union
+from typing import Any, Callable, Dict, List, Union
 
 # try to import readline, unix specific enhancement
 try:
@@ -29,21 +27,17 @@ try:
         readline.parse_and_bind("tab: complete")
         USE_LIBEDIT = False
 except ImportError:
+    readline = None
     USE_LIBEDIT = False
 
 from docutils.utils import column_width
 
 import sphinx.locale
 from sphinx import __display_version__, package_dir
-from sphinx.deprecation import RemovedInSphinx40Warning
 from sphinx.locale import __
-from sphinx.util.console import (  # type: ignore
-    colorize, bold, red, turquoise, nocolor, color_terminal
-)
+from sphinx.util.console import bold, color_terminal, colorize, nocolor, red  # type: ignore
 from sphinx.util.osutil import ensuredir
 from sphinx.util.template import SphinxRenderer
-
-TERM_ENCODING = getattr(sys.stdin, 'encoding', None)  # RemovedInSphinx40Warning
 
 EXTENSIONS = OrderedDict([
     ('autodoc', __('automatically insert docstrings from modules')),
@@ -135,30 +129,6 @@ def ok(x: str) -> str:
     return x
 
 
-def term_decode(text: Union[bytes, str]) -> str:
-    warnings.warn('term_decode() is deprecated.',
-                  RemovedInSphinx40Warning, stacklevel=2)
-
-    if isinstance(text, str):
-        return text
-
-    # Use the known encoding, if possible
-    if TERM_ENCODING:
-        return text.decode(TERM_ENCODING)
-
-    # If ascii is safe, use it with no warning
-    if text.decode('ascii', 'replace').encode('ascii', 'replace') == text:
-        return text.decode('ascii')
-
-    print(turquoise(__('* Note: non-ASCII characters entered '
-                       'and terminal encoding unknown -- assuming '
-                       'UTF-8 or Latin-1.')))
-    try:
-        return text.decode()
-    except UnicodeDecodeError:
-        return text.decode('latin1')
-
-
 def do_prompt(text: str, default: str = None, validator: Callable[[str], Any] = nonempty) -> Union[str, bool]:  # NOQA
     while True:
         if default is not None:
@@ -170,8 +140,11 @@ def do_prompt(text: str, default: str = None, validator: Callable[[str], Any] = 
             # sequence (see #5335).  To avoid the problem, all prompts are not colored
             # on libedit.
             pass
-        else:
+        elif readline:
+            # pass input_mode=True if readline available
             prompt = colorize(COLOR_QUESTION, prompt, input_mode=True)
+        else:
+            prompt = colorize(COLOR_QUESTION, prompt, input_mode=False)
         x = term_input(prompt).strip()
         if default and not x:
             x = default
@@ -184,22 +157,27 @@ def do_prompt(text: str, default: str = None, validator: Callable[[str], Any] = 
     return x
 
 
-def convert_python_source(source: str, rex: Pattern = re.compile(r"[uU]('.*?')")) -> str:
-    # remove Unicode literal prefixes
-    warnings.warn('convert_python_source() is deprecated.',
-                  RemovedInSphinx40Warning, stacklevel=2)
-    return rex.sub('\\1', source)
-
-
 class QuickstartRenderer(SphinxRenderer):
     def __init__(self, templatedir: str) -> None:
         self.templatedir = templatedir or ''
         super().__init__()
 
+    def _has_custom_template(self, template_name: str) -> bool:
+        """Check if custom template file exists.
+
+        Note: Please don't use this function from extensions.
+              It will be removed in the future without deprecation period.
+        """
+        template = path.join(self.templatedir, path.basename(template_name))
+        if self.templatedir and path.exists(template):
+            return True
+        else:
+            return False
+
     def render(self, template_name: str, context: Dict) -> str:
-        user_template = path.join(self.templatedir, path.basename(template_name))
-        if self.templatedir and path.exists(user_template):
-            return self.render_from_file(user_template, context)
+        if self._has_custom_template(template_name):
+            custom_template = path.join(self.templatedir, path.basename(template_name))
+            return self.render_from_file(custom_template, context)
         else:
             return super().render(template_name, context)
 
@@ -352,6 +330,7 @@ def generate(d: Dict, overwrite: bool = True, silent: bool = False, templatedir:
     if 'mastertocmaxdepth' not in d:
         d['mastertocmaxdepth'] = 2
 
+    d['root_doc'] = d['master']
     d['now'] = time.asctime()
     d['project_underline'] = column_width(d['project']) * '='
     d.setdefault('extensions', [])
@@ -396,7 +375,13 @@ def generate(d: Dict, overwrite: bool = True, silent: bool = False, templatedir:
     write_file(path.join(srcdir, 'conf.py'), template.render_string(conf_text, d))
 
     masterfile = path.join(srcdir, d['master'] + d['suffix'])
-    write_file(masterfile, template.render('quickstart/master_doc.rst_t', d))
+    if template._has_custom_template('quickstart/master_doc.rst_t'):
+        msg = ('A custom template `master_doc.rst_t` found. It has been renamed to '
+               '`root_doc.rst_t`.  Please rename it on your project too.')
+        print(colorize('red', msg))  # RemovedInSphinx60Warning
+        write_file(masterfile, template.render('quickstart/master_doc.rst_t', d))
+    else:
+        write_file(masterfile, template.render('quickstart/root_doc.rst_t', d))
 
     if d.get('make_mode') is True:
         makefile_template = 'quickstart/Makefile.new_t'
@@ -489,8 +474,10 @@ def get_parser() -> argparse.ArgumentParser:
                         help=__('project root'))
 
     group = parser.add_argument_group(__('Structure options'))
-    group.add_argument('--sep', action='store_true', default=None,
+    group.add_argument('--sep', action='store_true', dest='sep', default=None,
                        help=__('if specified, separate source and build dirs'))
+    group.add_argument('--no-sep', action='store_false', dest='sep',
+                       help=__('if specified, create build dir under source dir'))
     group.add_argument('--dot', metavar='DOT', default='_',
                        help=__('replacement for dot in _templates etc.'))
 

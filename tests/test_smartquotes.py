@@ -4,13 +4,11 @@
 
     Test smart quotes.
 
-    :copyright: Copyright 2007-2020 by the Sphinx team, see AUTHORS.
+    :copyright: Copyright 2007-2021 by the Sphinx team, see AUTHORS.
     :license: BSD, see LICENSE for details.
 """
 
 import pytest
-
-from sphinx.util import docutils
 
 
 @pytest.mark.sphinx(buildername='html', testroot='smartquotes', freshenv=True)
@@ -63,8 +61,6 @@ def test_smartquotes_disabled(app, status, warning):
     assert '<p>-- &quot;Sphinx&quot; is a tool that makes it easy ...</p>' in content
 
 
-@pytest.mark.skipif(docutils.__version_info__ < (0, 14),
-                    reason='docutils-0.14 or above is required')
 @pytest.mark.sphinx(buildername='html', testroot='smartquotes', freshenv=True,
                     confoverrides={'smartquotes_action': 'q'})
 def test_smartquotes_action(app, status, warning):

@@ -2,31 +2,26 @@
     sphinx.ext.autodoc.directive
     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-    :copyright: Copyright 2007-2017 by the Sphinx team, see AUTHORS.
+    :copyright: Copyright 2007-2021 by the Sphinx team, see AUTHORS.
     :license: BSD, see LICENSE for details.
 """
 
 import warnings
-from typing import Any, Callable, Dict, List, Set
+from typing import Any, Callable, Dict, List, Set, Type
 
 from docutils import nodes
 from docutils.nodes import Element, Node
-from docutils.parsers.rst.states import RSTState, Struct
+from docutils.parsers.rst.states import RSTState
 from docutils.statemachine import StringList
 from docutils.utils import Reporter, assemble_option_dict
 
 from sphinx.config import Config
-from sphinx.deprecation import RemovedInSphinx40Warning
+from sphinx.deprecation import RemovedInSphinx50Warning, RemovedInSphinx60Warning
 from sphinx.environment import BuildEnvironment
 from sphinx.ext.autodoc import Documenter, Options
 from sphinx.util import logging
 from sphinx.util.docutils import SphinxDirective, switch_source_input
 from sphinx.util.nodes import nested_parse_with_titles
-
-if False:
-    # For type annotation
-    from typing import Type  # for python3.5.1
-
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +31,9 @@ AUTODOC_DEFAULT_OPTIONS = ['members', 'undoc-members', 'inherited-members',
                            'show-inheritance', 'private-members', 'special-members',
                            'ignore-module-all', 'exclude-members', 'member-order',
                            'imported-members']
+
+AUTODOC_EXTENDABLE_OPTIONS = ['members', 'private-members', 'special-members',
+                              'exclude-members']
 
 
 class DummyOptionSpec(dict):
@@ -53,29 +51,35 @@ class DocumenterBridge:
     """A parameters container for Documenters."""
 
     def __init__(self, env: BuildEnvironment, reporter: Reporter, options: Options,
-                 lineno: int, state: Any = None) -> None:
+                 lineno: int, state: Any) -> None:
         self.env = env
-        self.reporter = reporter
+        self._reporter = reporter
         self.genopt = options
         self.lineno = lineno
-        self.filename_set = set()  # type: Set[str]
+        self.record_dependencies: Set[str] = set()
         self.result = StringList()
-
-        if state:
-            self.state = state
-        else:
-            # create fake object for self.state.document.settings.tab_width
-            warnings.warn('DocumenterBridge requires a state object on instantiation.',
-                          RemovedInSphinx40Warning, stacklevel=2)
-            settings = Struct(tab_width=8)
-            document = Struct(settings=settings)
-            self.state = Struct(document=document)
+        self.state = state
 
     def warn(self, msg: str) -> None:
+        warnings.warn('DocumenterBridge.warn is deprecated.  Plase use sphinx.util.logging '
+                      'module instead.',
+                      RemovedInSphinx60Warning, stacklevel=2)
         logger.warning(msg, location=(self.env.docname, self.lineno))
 
+    @property
+    def filename_set(self) -> Set:
+        warnings.warn('DocumenterBridge.filename_set is deprecated.',
+                      RemovedInSphinx60Warning, stacklevel=2)
+        return self.record_dependencies
 
-def process_documenter_options(documenter: "Type[Documenter]", config: Config, options: Dict
+    @property
+    def reporter(self) -> Reporter:
+        warnings.warn('DocumenterBridge.reporter is deprecated.',
+                      RemovedInSphinx50Warning, stacklevel=2)
+        return self._reporter
+
+
+def process_documenter_options(documenter: Type[Documenter], config: Config, options: Dict
                                ) -> Options:
     """Recognize options of Documenter from user input."""
     for name in AUTODOC_DEFAULT_OPTIONS:
@@ -84,7 +88,19 @@ def process_documenter_options(documenter: "Type[Documenter]", config: Config, o
         else:
             negated = options.pop('no-' + name, True) is None
             if name in config.autodoc_default_options and not negated:
-                options[name] = config.autodoc_default_options[name]
+                if name in options and isinstance(config.autodoc_default_options[name], str):
+                    # take value from options if present or extend it
+                    # with autodoc_default_options if necessary
+                    if name in AUTODOC_EXTENDABLE_OPTIONS:
+                        if options[name] is not None and options[name].startswith('+'):
+                            options[name] = ','.join([config.autodoc_default_options[name],
+                                                      options[name][1:]])
+                else:
+                    options[name] = config.autodoc_default_options[name]
+
+            elif options.get(name) is not None:
+                # remove '+' from option argument if there's nothing to merge it with
+                options[name] = options[name].lstrip('+')
 
     return Options(assemble_option_dict(options.items(), documenter.option_spec))
 
@@ -94,7 +110,7 @@ def parse_generated_content(state: RSTState, content: StringList, documenter: Do
     """Parse a generated content by Documenter."""
     with switch_source_input(state, content):
         if documenter.titles_allowed:
-            node = nodes.section()  # type: Element
+            node: Element = nodes.section()
             # necessary so that the child nodes get the right source/line set
             node.document = state.document
             nested_parse_with_titles(state, content, node)
@@ -151,7 +167,7 @@ class AutodocDirective(SphinxDirective):
 
         # record all filenames as dependencies -- this will at least
         # partially make automatic invalidation possible
-        for fn in params.filename_set:
+        for fn in params.record_dependencies:
             self.state.document.settings.record_dependencies.add(fn)
 
         result = parse_generated_content(self.state, params.result, documenter)

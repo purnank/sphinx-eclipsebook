@@ -10,7 +10,7 @@
     Copyright 2008 Société des arts technologiques (SAT),
     https://sat.qc.ca/
 
-    :copyright: Copyright 2007-2020 by the Sphinx team, see AUTHORS.
+    :copyright: Copyright 2007-2021 by the Sphinx team, see AUTHORS.
     :license: BSD, see LICENSE for details.
 """
 
@@ -19,19 +19,16 @@ import glob
 import locale
 import os
 import sys
-import warnings
 from copy import copy
 from fnmatch import fnmatch
 from importlib.machinery import EXTENSION_SUFFIXES
 from os import path
-from typing import Any, List, Tuple
+from typing import Any, Generator, List, Tuple
 
 import sphinx.locale
 from sphinx import __display_version__, package_dir
 from sphinx.cmd.quickstart import EXTENSIONS
-from sphinx.deprecation import RemovedInSphinx40Warning, deprecated_alias
 from sphinx.locale import __
-from sphinx.util import rst
 from sphinx.util.osutil import FileAvoidWrite, ensuredir
 from sphinx.util.template import ReSTRenderer
 
@@ -49,20 +46,6 @@ else:
 PY_SUFFIXES = ('.py', '.pyx') + tuple(EXTENSION_SUFFIXES)
 
 template_dir = path.join(package_dir, 'templates', 'apidoc')
-
-
-def makename(package: str, module: str) -> str:
-    """Join package and module with a dot."""
-    warnings.warn('makename() is deprecated.',
-                  RemovedInSphinx40Warning, stacklevel=2)
-    # Both package and module can be None/empty.
-    if package:
-        name = package
-        if module:
-            name += '.' + module
-    else:
-        name = module
-    return name
 
 
 def is_initpy(filename: str) -> bool:
@@ -107,26 +90,6 @@ def write_file(name: str, text: str, opts: Any) -> None:
             print(__('Creating file %s.') % fname)
         with FileAvoidWrite(fname) as f:
             f.write(text)
-
-
-def format_heading(level: int, text: str, escape: bool = True) -> str:
-    """Create a heading of <level> [1, 2 or 3 supported]."""
-    warnings.warn('format_warning() is deprecated.',
-                  RemovedInSphinx40Warning, stacklevel=2)
-    if escape:
-        text = rst.escape(text)
-    underlining = ['=', '-', '~', ][level - 1] * len(text)
-    return '%s\n%s\n\n' % (text, underlining)
-
-
-def format_directive(module: str, package: str = None) -> str:
-    """Create the automodule directive and add the options."""
-    warnings.warn('format_directive() is deprecated.',
-                  RemovedInSphinx40Warning, stacklevel=2)
-    directive = '.. automodule:: %s\n' % module_join(package, module)
-    for option in OPTIONS:
-        directive += '    :%s:\n' % option
-    return directive
 
 
 def create_module_file(package: str, basename: str, opts: Any,
@@ -206,33 +169,6 @@ def create_modules_toc_file(modules: List[str], opts: Any, name: str = 'modules'
     write_file(name, text, opts)
 
 
-def shall_skip(module: str, opts: Any, excludes: List[str] = []) -> bool:
-    """Check if we want to skip this module."""
-    warnings.warn('shall_skip() is deprecated.',
-                  RemovedInSphinx40Warning, stacklevel=2)
-    # skip if the file doesn't exist and not using implicit namespaces
-    if not opts.implicit_namespaces and not path.exists(module):
-        return True
-
-    # Are we a package (here defined as __init__.py, not the folder in itself)
-    if is_initpy(module):
-        # Yes, check if we have any non-excluded modules at all here
-        all_skipped = True
-        basemodule = path.dirname(module)
-        for submodule in glob.glob(path.join(basemodule, '*.py')):
-            if not is_excluded(path.join(basemodule, submodule), excludes):
-                # There's a non-excluded module here, we won't skip
-                all_skipped = False
-        if all_skipped:
-            return True
-
-    # skip if it has a "private" name and this is selected
-    filename = path.basename(module)
-    if is_initpy(filename) and filename.startswith('_') and not opts.includeprivate:
-        return True
-    return False
-
-
 def is_skipped_package(dirname: str, opts: Any, excludes: List[str] = []) -> bool:
     """Check if we want to skip this module."""
     if not path.isdir(dirname):
@@ -264,14 +200,46 @@ def is_skipped_module(filename: str, opts: Any, excludes: List[str]) -> bool:
         return False
 
 
+def walk(rootpath: str, excludes: List[str], opts: Any
+         ) -> Generator[Tuple[str, List[str], List[str]], None, None]:
+    """Walk through the directory and list files and subdirectories up."""
+    followlinks = getattr(opts, 'followlinks', False)
+    includeprivate = getattr(opts, 'includeprivate', False)
+
+    for root, subs, files in os.walk(rootpath, followlinks=followlinks):
+        # document only Python module files (that aren't excluded)
+        files = sorted(f for f in files
+                       if f.endswith(PY_SUFFIXES) and
+                       not is_excluded(path.join(root, f), excludes))
+
+        # remove hidden ('.') and private ('_') directories, as well as
+        # excluded dirs
+        if includeprivate:
+            exclude_prefixes: Tuple[str, ...] = ('.',)
+        else:
+            exclude_prefixes = ('.', '_')
+
+        subs[:] = sorted(sub for sub in subs if not sub.startswith(exclude_prefixes) and
+                         not is_excluded(path.join(root, sub), excludes))
+
+        yield root, subs, files
+
+
+def has_child_module(rootpath: str, excludes: List[str], opts: Any) -> bool:
+    """Check the given directory contains child modules at least one."""
+    for root, subs, files in walk(rootpath, excludes, opts):
+        if files:
+            return True
+
+    return False
+
+
 def recurse_tree(rootpath: str, excludes: List[str], opts: Any,
                  user_template_dir: str = None) -> List[str]:
     """
     Look for every file in the directory tree and create the corresponding
     ReST files.
     """
-    followlinks = getattr(opts, 'followlinks', False)
-    includeprivate = getattr(opts, 'includeprivate', False)
     implicit_namespaces = getattr(opts, 'implicit_namespaces', False)
 
     # check if the base directory is a package and get its name
@@ -282,48 +250,36 @@ def recurse_tree(rootpath: str, excludes: List[str], opts: Any,
         root_package = None
 
     toplevels = []
-    for root, subs, files in os.walk(rootpath, followlinks=followlinks):
-        # document only Python module files (that aren't excluded)
-        py_files = sorted(f for f in files
-                          if f.endswith(PY_SUFFIXES) and
-                          not is_excluded(path.join(root, f), excludes))
-        is_pkg = is_packagedir(None, py_files)
+    for root, subs, files in walk(rootpath, excludes, opts):
+        is_pkg = is_packagedir(None, files)
         is_namespace = not is_pkg and implicit_namespaces
         if is_pkg:
-            for f in py_files[:]:
+            for f in files[:]:
                 if is_initpy(f):
-                    py_files.remove(f)
-                    py_files.insert(0, f)
+                    files.remove(f)
+                    files.insert(0, f)
         elif root != rootpath:
             # only accept non-package at toplevel unless using implicit namespaces
             if not implicit_namespaces:
                 del subs[:]
                 continue
-        # remove hidden ('.') and private ('_') directories, as well as
-        # excluded dirs
-        if includeprivate:
-            exclude_prefixes = ('.',)  # type: Tuple[str, ...]
-        else:
-            exclude_prefixes = ('.', '_')
-        subs[:] = sorted(sub for sub in subs if not sub.startswith(exclude_prefixes) and
-                         not is_excluded(path.join(root, sub), excludes))
 
         if is_pkg or is_namespace:
             # we are in a package with something to document
-            if subs or len(py_files) > 1 or not is_skipped_package(root, opts):
+            if subs or len(files) > 1 or not is_skipped_package(root, opts):
                 subpackage = root[len(rootpath):].lstrip(path.sep).\
                     replace(path.sep, '.')
                 # if this is not a namespace or
                 # a namespace and there is something there to document
-                if not is_namespace or len(py_files) > 0:
+                if not is_namespace or has_child_module(root, excludes, opts):
                     create_package_file(root, root_package, subpackage,
-                                        py_files, opts, subs, is_namespace, excludes,
+                                        files, opts, subs, is_namespace, excludes,
                                         user_template_dir)
                     toplevels.append(module_join(root_package, subpackage))
         else:
             # if we are at the root level, we don't require it to be a package
             assert root == rootpath and root_package is None
-            for py_file in py_files:
+            for py_file in files:
                 if not is_skipped_module(path.join(rootpath, py_file), opts, excludes):
                     module = py_file.split('.')[0]
                     create_module_file(root_package, module, opts, user_template_dir)
@@ -514,13 +470,6 @@ def main(argv: List[str] = sys.argv[1:]) -> int:
         create_modules_toc_file(modules, args, args.tocfile, args.templatedir)
 
     return 0
-
-
-deprecated_alias('sphinx.ext.apidoc',
-                 {
-                     'INITPY': '__init__.py',
-                 },
-                 RemovedInSphinx40Warning)
 
 
 # So program can be started with "python -m sphinx.apidoc ..."

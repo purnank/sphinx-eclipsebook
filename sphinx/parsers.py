@@ -4,27 +4,25 @@
 
     A Base class for additional parsers.
 
-    :copyright: Copyright 2007-2020 by the Sphinx team, see AUTHORS.
+    :copyright: Copyright 2007-2021 by the Sphinx team, see AUTHORS.
     :license: BSD, see LICENSE for details.
 """
 
 import warnings
-from typing import Any, Dict, List, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Type, Union
 
 import docutils.parsers
 import docutils.parsers.rst
 from docutils import nodes
 from docutils.parsers.rst import states
 from docutils.statemachine import StringList
+from docutils.transforms import Transform
 from docutils.transforms.universal import SmartQuotes
 
 from sphinx.deprecation import RemovedInSphinx50Warning
 from sphinx.util.rst import append_epilog, prepend_prolog
 
-if False:
-    # For type annotation
-    from docutils.transforms import Transform  # NOQA
-    from typing import Type  # NOQA # for python3.5.1
+if TYPE_CHECKING:
     from sphinx.application import Sphinx
 
 
@@ -71,7 +69,7 @@ class Parser(docutils.parsers.Parser):
 class RSTParser(docutils.parsers.rst.Parser, Parser):
     """A reST parser for Sphinx."""
 
-    def get_transforms(self) -> List["Type[Transform]"]:
+    def get_transforms(self) -> List[Type[Transform]]:
         """Sphinx's reST parser replaces a transform class for smart-quotes by own's
 
         refs: sphinx.io.SphinxStandaloneReader
