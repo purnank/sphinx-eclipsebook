@@ -2081,6 +2081,7 @@ class LaTeXTranslator(SphinxTranslator):
             .replace('+', r'+\-')\
             .replace('&', r'&\-')\
             .replace(r'\textbackslash{}textasciitilde\{\}',r'\textasciitilde{}')\
+            .replace(r'\textbackslash{}sphinxhyphen\{\}',r'\sphinxhyphen{}')\
             .replace('\\textbackslash{}\\', '\\')\
 
 #M-
