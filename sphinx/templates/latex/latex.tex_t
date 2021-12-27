@@ -86,6 +86,7 @@
 <%- else %>
 \renewcommand{\releasename}{}
 <%- endif %>
+<%= preamble2 %>
 <%= makeindex %>
 \begin{document}
 <%= shorthandoff %>
