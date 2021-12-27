@@ -63,7 +63,7 @@ def test_mangle_signature():
     (a=1, b=2, c=3) :: ([a, b, c])
     (a=1, b=<SomeClass: a, b, c>, c=3) :: ([a, b, c])
     (a=1, b=T(a=1, b=2), c=3) :: ([a, b, c])
-    (a: int, b: int) -> str :: (a, b)
+    (a: Tuple[int, str], b: int) -> str :: (a, b)
     """
 
     TEST = [[y.strip() for y in x.split("::")] for x in TEST.split("\n")
@@ -106,6 +106,11 @@ def test_extract_summary(capsys):
 
     # heading
     doc = ['blah blah',
+           '=========']
+    assert extract_summary(doc, document) == 'blah blah'
+
+    doc = ['=========',
+           'blah blah',
            '=========']
     assert extract_summary(doc, document) == 'blah blah'
 
@@ -161,6 +166,7 @@ def test_get_items_summary(make_app, app_params):
         'emptyLine': "This is the real summary",
         'module_attr': 'This is a module attribute',
         'C.class_attr': 'This is a class attribute',
+        'C.instance_attr': 'This is an instance attribute',
         'C.prop_attr1': 'This is a function docstring',
         'C.prop_attr2': 'This is a attribute docstring',
         'C.C2': 'This is a nested inner class docstring',
@@ -329,6 +335,7 @@ def test_autosummary_generate(app, status, warning):
             '      ~Foo.CONSTANT3\n'
             '      ~Foo.CONSTANT4\n'
             '      ~Foo.baz\n'
+            '      ~Foo.value\n'
             '   \n' in Foo)
 
     FooBar = (app.srcdir / 'generated' / 'autosummary_dummy_module.Foo.Bar.rst').read_text()

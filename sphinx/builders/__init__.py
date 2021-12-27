@@ -11,7 +11,8 @@
 import pickle
 import time
 from os import path
-from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Sequence, Set, Tuple, Type, Union
+from typing import (TYPE_CHECKING, Any, Dict, Iterable, List, Optional, Sequence, Set, Tuple,
+                    Type, Union)
 
 from docutils import nodes
 from docutils.nodes import Node
@@ -67,7 +68,7 @@ class Builder:
     # doctree versioning method
     versioning_method = 'none'
     versioning_compare = False
-    # allow parallel write_doc() calls
+    #: allow parallel write_doc() calls
     allow_parallel = False
     # support translation
     use_message_catalog = True
@@ -88,7 +89,7 @@ class Builder:
         ensuredir(self.doctreedir)
 
         self.app: Sphinx = app
-        self.env: BuildEnvironment = None
+        self.env: Optional[BuildEnvironment] = None
         self.events: EventManager = app.events
         self.config: Config = app.config
         self.tags: Tags = app.tags
@@ -216,7 +217,8 @@ class Builder:
         for catalog in status_iterator(catalogs, __('writing output... '), "darkgreen",
                                        len(catalogs), self.app.verbosity,
                                        stringify_func=cat2relpath):
-            catalog.write_mo(self.config.language)
+            catalog.write_mo(self.config.language,
+                             self.config.gettext_allow_fuzzy_translations)
 
     def compile_all_catalogs(self) -> None:
         repo = CatalogRepository(self.srcdir, self.config.locale_dirs,
@@ -225,7 +227,7 @@ class Builder:
         self.compile_catalogs(set(repo.catalogs), message)
 
     def compile_specific_catalogs(self, specified_files: List[str]) -> None:
-        def to_domain(fpath: str) -> str:
+        def to_domain(fpath: str) -> Optional[str]:
             docname = self.env.path2doc(path.abspath(fpath))
             if docname:
                 return docname_to_domain(docname, self.config.gettext_compact)

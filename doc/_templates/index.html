@@ -29,19 +29,19 @@
     <li>{%trans%}<b>Automatic indices:</b> general index as well as a language-specific
       module indices{%endtrans%}</li>
     <li>{%trans%}<b>Code handling:</b> automatic highlighting using the <a
-      href="http://pygments.org">Pygments</a> highlighter{%endtrans%}</li>
+      href="https://pygments.org">Pygments</a> highlighter{%endtrans%}</li>
     <li>{%trans path=pathto('ext/builtins')%}<b>Extensions:</b> automatic testing of code snippets, inclusion of
       docstrings from Python modules (API docs), and
       <a href="{{ path }}#builtin-sphinx-extensions">more</a>{%endtrans%}</li>
-    <li>{%trans path=pathto("usage/extensions")%}<b>Contributed extensions:</b> dozens of
+    <li>{%trans path=pathto("usage/extensions/index")%}<b>Contributed extensions:</b> dozens of
       extensions <a href="{{ path }}#third-party-extensions">contributed by users</a>;
       most of them installable from PyPI{%endtrans%}</li>
   </ul>
   <p>{%trans%}
-    Sphinx uses <a href="http://docutils.sourceforge.net/rst.html">reStructuredText</a>
+    Sphinx uses <a href="https://docutils.sourceforge.io/rst.html">reStructuredText</a>
     as its markup language, and many of its strengths come from the power and
     straightforwardness of reStructuredText and its parsing and translating
-    suite, the <a href="http://docutils.sourceforge.net/">Docutils</a>.{%endtrans%}
+    suite, the <a href="https://docutils.sourceforge.io/">Docutils</a>.{%endtrans%}
   </p>
 
   <h2 style="margin-bottom: 0">{%trans%}Documentation{%endtrans%}</h2>
@@ -52,23 +52,25 @@
         <p class="biglink"><a class="biglink" href="{{ pathto("usage/quickstart") }}">{%trans%}First steps with Sphinx{%endtrans%}</a><br/>
            <span class="linkdescr">{%trans%}overview of basic tasks{%endtrans%}</span></p>
       </td><td>
-        {%- if hasdoc('search') %}<p class="biglink"><a class="biglink" href="{{ pathto("search") }}">{%trans%}Search page{%endtrans%}</a><br/>
-           <span class="linkdescr">{%trans%}search the documentation{%endtrans%}</span></p>{%- endif %}
+        <p class="biglink"><a class="biglink" href="{{ pathto("tutorial/index") }}">{%trans%}Tutorial{%endtrans%}</a><br/>
+           <span class="linkdescr">{%trans%}beginners tutorial{%endtrans%}</span></p>
       </td>
     </tr><tr>
       <td>
         <p class="biglink"><a class="biglink" href="{{ pathto("contents") }}">{%trans%}Contents{%endtrans%}</a><br/>
            <span class="linkdescr">{%trans%}for a complete overview{%endtrans%}</span></p>
       </td><td>
-        {%- if hasdoc('genindex') %}<p class="biglink"><a class="biglink" href="{{ pathto("genindex") }}">{%trans%}General Index{%endtrans%}</a><br/>
-           <span class="linkdescr">{%trans%}all functions, classes, terms{%endtrans%}</span></p>{%- endif %}
+        {%- if hasdoc('search') %}<p class="biglink"><a class="biglink" href="{{ pathto("search") }}">{%trans%}Search page{%endtrans%}</a><br/>
+           <span class="linkdescr">{%trans%}search the documentation{%endtrans%}</span></p>{%- endif %}
       </td>
     </tr><tr>
       <td>
         <p class="biglink"><a class="biglink" href="{{ pathto("changes") }}">{%trans%}Changes{%endtrans%}</a><br/>
            <span class="linkdescr">{%trans%}release history{%endtrans%}</span></p>
       </td><td>
-      </td>
+        {%- if hasdoc('genindex') %}<p class="biglink"><a class="biglink" href="{{ pathto("genindex") }}">{%trans%}General Index{%endtrans%}</a><br/>
+           <span class="linkdescr">{%trans%}all functions, classes, terms{%endtrans%}</span></p>{%- endif %}
+      </td><td>
     </tr>
   </table>
 
@@ -116,12 +118,12 @@
     this part of the documentation is for you.{%endtrans%}</p>
 
     <ul>
-      <li>{%trans path=pathto("internals/contributing")%}<a href="{{ path }}">Sphinx Contributors’s Guide</a></li>{%endtrans%}
+      <li>{%trans path=pathto("internals/contributing")%}<a href="{{ path }}">Sphinx Contributors’ Guide</a></li>{%endtrans%}
       <li>{%trans path=pathto("internals/authors")%}<a href="{{ path }}">Sphinx Authors</a></li>{%endtrans%}
     </ul>
 
   <h2>{%trans%}Code of Conduct{%endtrans%}</h2>
 
-  <p>{%trans path=pathto("code_of_conduct")%}Please adhere to our <a href="{{ path }}">Code of Conduct</a>.{%endtrans%}</p>
+  <p>{%trans path=pathto("internals/code-of-conduct")%}Please adhere to our <a href="{{ path }}">Code of Conduct</a>.{%endtrans%}</p>
 
 {% endblock %}

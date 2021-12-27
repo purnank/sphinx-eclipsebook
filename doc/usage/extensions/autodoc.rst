@@ -343,12 +343,17 @@ inserting them into the page source under a suitable :rst:dir:`py:module`,
 
         .. autoclass:: module.name::Noodle
 
+   * :rst:dir:`autoclass` also recognizes the ``class-doc-from`` option that
+     can be used to override the global value of :confval:`autoclass_content`.
+
+     .. versionadded:: 4.1
 
 .. rst:directive:: autofunction
                    autodecorator
                    autodata
                    automethod
                    autoattribute
+                   autoproperty
 
    These work exactly like :rst:dir:`autoclass` etc.,
    but do not offer the options used for automatic member documentation.
@@ -418,6 +423,8 @@ inserting them into the page source under a suitable :rst:dir:`py:module`,
       option.
    .. versionchanged:: 2.0
       :rst:dir:`autodecorator` added.
+   .. versionchanged:: 2.1
+      :rst:dir:`autoproperty` added.
    .. versionchanged:: 3.4
       :rst:dir:`autodata` and :rst:dir:`autoattribute` now have a ``no-value``
       option.
@@ -458,6 +465,20 @@ There are also config values that you can set:
    it is used instead.
 
    .. versionadded:: 1.4
+
+.. confval:: autodoc_class_signature
+
+   This value selects how the signautre will be displayed for the class defined
+   by :rst:dir:`autoclass` directive.  The possible values are:
+
+   ``"mixed"``
+      Display the signature with the class name.
+   ``"separated"``
+      Display the signature as a method.
+
+   The default is ``"mixed"``.
+
+   .. versionadded:: 4.1
 
 .. confval:: autodoc_member_order
 
@@ -507,7 +528,7 @@ There are also config values that you can set:
    The supported options are ``'members'``, ``'member-order'``,
    ``'undoc-members'``, ``'private-members'``, ``'special-members'``,
    ``'inherited-members'``, ``'show-inheritance'``, ``'ignore-module-all'``,
-   ``'imported-members'`` and ``'exclude-members'``.
+   ``'imported-members'``, ``'exclude-members'`` and ``'class-doc-from'``.
 
    .. versionadded:: 1.8
 
@@ -516,6 +537,9 @@ There are also config values that you can set:
 
    .. versionchanged:: 2.1
       Added ``'imported-members'``.
+
+   .. versionchanged:: 4.1
+      Added ``'class-doc-from'``.
 
 .. confval:: autodoc_docstring_signature
 
@@ -566,14 +590,26 @@ There are also config values that you can set:
    This value controls how to represent typehints.  The setting takes the
    following values:
 
-   * ``'signature'`` -- Show typehints as its signature (default)
-   * ``'description'`` -- Show typehints as content of function or method
+   * ``'signature'`` -- Show typehints in the signature (default)
+   * ``'description'`` -- Show typehints as content of the function or method
+     The typehints of overloaded functions or methods will still be represented
+     in the signature.
    * ``'none'`` -- Do not show typehints
+   * ``'both'`` -- Show typehints in the signature and as content of
+     the function or method
+
+   Overloaded functions or methods will not have typehints included in the
+   description because it is impossible to accurately represent all possible
+   overloads as a list of parameters.
 
    .. versionadded:: 2.1
    .. versionadded:: 3.0
 
       New option ``'description'`` is added.
+
+   .. versionadded:: 4.1
+
+      New option ``'both'`` is added.
 
 .. confval:: autodoc_typehints_description_target
 
@@ -729,6 +765,25 @@ needed docstring processing in event :event:`autodoc-process-docstring`:
 
 .. autofunction:: cut_lines
 .. autofunction:: between
+
+.. event:: autodoc-process-bases (app, name, obj, options, bases)
+
+   Emitted when autodoc has read and processed a class to determine the
+   base-classes.  *bases* is a list of classes that the event handler can
+   modify **in place** to change what Sphinx puts into the output.  It's
+   emitted only if ``show-inheritance`` option given.
+
+   :param app: the Sphinx application object
+   :param name: the fully qualified name of the object
+   :param obj: the object itself
+   :param options: the options given to the class directive
+   :param bases: the list of base classes signature. see above.
+
+   .. versionadded:: 4.1
+   .. versionchanged:: 4.3
+
+      ``bases`` can contain a string as a base class name.  It will be processed
+      as reST mark-up'ed text.
 
 
 Skipping members

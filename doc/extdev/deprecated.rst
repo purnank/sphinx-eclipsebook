@@ -22,6 +22,51 @@ The following is a list of deprecated interfaces.
      - (will be) Removed
      - Alternatives
 
+   * - ``sphinx.ext.autodoc.AttributeDocumenter._datadescriptor``
+     - 4.3
+     - 6.0
+     - N/A
+
+   * - ``sphinx.writers.html.HTMLTranslator._fieldlist_row_index``
+     - 4.3
+     - 6.0
+     - ``sphinx.writers.html.HTMLTranslator._fieldlist_row_indices``
+
+   * - ``sphinx.writers.html.HTMLTranslator._table_row_index``
+     - 4.3
+     - 6.0
+     - ``sphinx.writers.html.HTMLTranslator._table_row_indices``
+
+   * - ``sphinx.writers.html5.HTML5Translator._fieldlist_row_index``
+     - 4.3
+     - 6.0
+     - ``sphinx.writers.html5.HTML5Translator._fieldlist_row_indices``
+
+   * - ``sphinx.writers.html5.HTML5Translator._table_row_index``
+     - 4.3
+     - 6.0
+     - ``sphinx.writers.html5.HTML5Translator._table_row_indices``
+
+   * - The optional argument ``app`` for ``sphinx.environment.BuildEnvironment``
+     - 4.1
+     - 6.0
+     - The required argument
+
+   * - ``sphinx.application.Sphinx.html_theme``
+     - 4.1
+     - 6.0
+     - ``sphinx.registry.SphinxComponentRegistry.html_themes``
+
+   * - ``sphinx.ext.autosummary._app``
+     - 4.1
+     - 6.0
+     - N/A
+
+   * - ``sphinx.util.docstrings.extract_metadata()``
+     - 4.1
+     - 6.0
+     - ``sphinx.util.docstrings.separate_metadata()``
+
    * - ``favicon`` variable in HTML templates
      - 4.0
      - TBD
@@ -35,12 +80,12 @@ The following is a list of deprecated interfaces.
    * - ``sphinx.directives.patches.ListTable``
      - 4.0
      - 6.0
-     - ``docutils.parsers.rst.diretives.tables.ListSVTable``
+     - ``docutils.parsers.rst.directives.tables.ListSVTable``
 
    * - ``sphinx.directives.patches.RSTTable``
      - 4.0
      - 6.0
-     - ``docutils.parsers.rst.diretives.tables.RSTTable``
+     - ``docutils.parsers.rst.directives.tables.RSTTable``
 
    * - ``sphinx.ext.autodoc.directive.DocumenterBridge.filename_set``
      - 4.0
@@ -80,7 +125,7 @@ The following is a list of deprecated interfaces.
    * - ``sphinx.util.smartypants``
      - 4.0
      - 6.0
-     - ``docutils.utils.smartyquotes``
+     - ``docutils.utils.smartquotes``
 
    * - ``sphinx.util.typing.DirectiveOption``
      - 4.0
@@ -728,10 +773,16 @@ The following is a list of deprecated interfaces.
      - 4.0
      - ``sphinx.domains.std.StandardDomain.process_doc()``
 
+   * - ``sphinx.domains.js.JSObject.display_prefix``
+     - 
+     - 4.3
+     - ``sphinx.domains.js.JSObject.get_display_prefix()``
+
    * - ``sphinx.environment.NoUri``
      - 2.1
-     - 4.0
+     - 3.0
      - ``sphinx.errors.NoUri``
+
    * - ``sphinx.ext.apidoc.format_directive()``
      - 2.1
      - 4.0
@@ -1015,7 +1066,7 @@ The following is a list of deprecated interfaces.
 
    * - ``sphinx.util.force_decode()``
      - 2.0
-     - 4.0
+     - 5.0
      - N/A
 
    * - ``sphinx.util.get_matching_docs()``
@@ -1186,7 +1237,7 @@ The following is a list of deprecated interfaces.
 
    * - :meth:`~sphinx.application.Sphinx.add_stylesheet()`
      - 1.8
-     - 4.0
+     - 6.0
      - :meth:`~sphinx.application.Sphinx.add_css_file()`
 
    * - :meth:`~sphinx.application.Sphinx.add_javascript()`

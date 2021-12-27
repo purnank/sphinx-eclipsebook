@@ -127,6 +127,10 @@ Builtin themes
 
 Sphinx comes with a selection of themes to choose from.
 
+Note that from these themes only the Alabaster and Scrolls themes are
+mobile-optimated, the other themes resort to horizontal scrolling
+if the screen is too narrow.
+
 .. cssclass:: clear
 
 These themes are:
@@ -248,7 +252,8 @@ These themes are:
 
 **scrolls**
   A more lightweight theme, based on `the Jinja documentation
-  <http://jinja.pocoo.org/>`_.  The following color options are available:
+  <https://jinja.palletsprojects.com/>`_.  The following color options are
+  available:
 
   - **headerbordercolor**
   - **subheadlinecolor**

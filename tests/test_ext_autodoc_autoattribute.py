@@ -101,6 +101,17 @@ def test_autoattribute_instance_variable_in_alias(app):
 
 
 @pytest.mark.sphinx('html', testroot='ext-autodoc')
+def test_autoattribute_instance_variable_without_comment(app):
+    actual = do_autodoc(app, 'attribute', 'target.instance_variable.Bar.attr4')
+    assert list(actual) == [
+        '',
+        '.. py:attribute:: Bar.attr4',
+        '   :module: target.instance_variable',
+        '',
+    ]
+
+
+@pytest.mark.sphinx('html', testroot='ext-autodoc')
 def test_autoattribute_slots_variable_list(app):
     actual = do_autodoc(app, 'attribute', 'target.slots.Foo.attr')
     assert list(actual) == [
@@ -118,6 +129,7 @@ def test_autoattribute_slots_variable_dict(app):
         '',
         '.. py:attribute:: Bar.attr1',
         '   :module: target.slots',
+        '   :type: int',
         '',
         '   docstring of attr1',
         '',
@@ -156,7 +168,7 @@ def test_autoattribute_GenericAlias(app):
             '',
             '   A list of int',
             '',
-            '   alias of :class:`~typing.List`\\ [:class:`int`]',
+            '   alias of :py:class:`~typing.List`\\ [:py:class:`int`]',
             '',
         ]
 
@@ -171,7 +183,7 @@ def test_autoattribute_NewType(app):
         '',
         '   T6',
         '',
-        '   alias of :class:`int`',
+        '   alias of :py:class:`int`',
         '',
     ]
 

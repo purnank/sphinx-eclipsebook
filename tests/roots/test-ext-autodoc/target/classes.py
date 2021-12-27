@@ -29,4 +29,11 @@ class Quux(List[Union[int, float]]):
     pass
 
 
+class Corge(Quux):
+    pass
+
+
 Alias = Foo
+
+#: docstring
+OtherAlias = Bar

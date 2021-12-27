@@ -58,6 +58,7 @@ import posixpath
 import re
 import sys
 import warnings
+from inspect import Parameter
 from os import path
 from types import ModuleType
 from typing import Any, Dict, List, Optional, Tuple, Type, cast
@@ -72,7 +73,8 @@ import sphinx
 from sphinx import addnodes
 from sphinx.application import Sphinx
 from sphinx.config import Config
-from sphinx.deprecation import RemovedInSphinx50Warning
+from sphinx.deprecation import (RemovedInSphinx50Warning, RemovedInSphinx60Warning,
+                                deprecated_alias)
 from sphinx.environment import BuildEnvironment
 from sphinx.environment.adapters.toctree import TocTree
 from sphinx.ext.autodoc import INSTANCEATTR, Documenter
@@ -80,10 +82,13 @@ from sphinx.ext.autodoc.directive import DocumenterBridge, Options
 from sphinx.ext.autodoc.importer import import_module
 from sphinx.ext.autodoc.mock import mock
 from sphinx.locale import __
+from sphinx.project import Project
 from sphinx.pycode import ModuleAnalyzer, PycodeError
+from sphinx.registry import SphinxComponentRegistry
 from sphinx.util import logging, rst
 from sphinx.util.docutils import (NullReporter, SphinxDirective, SphinxRole, new_document,
                                   switch_source_input)
+from sphinx.util.inspect import signature_from_str
 from sphinx.util.matching import Matcher
 from sphinx.util.typing import OptionSpec
 from sphinx.writers.html import HTMLTranslator
@@ -163,17 +168,33 @@ def autosummary_table_visit_html(self: HTMLTranslator, node: autosummary_table) 
 
 
 # -- autodoc integration -------------------------------------------------------
+deprecated_alias('sphinx.ext.autosummary',
+                 {
+                     '_app': None,
+                 },
+                 RemovedInSphinx60Warning,
+                 {
+                 })
 
-# current application object (used in `get_documenter()`).
-_app: Sphinx = None
+
+class FakeApplication:
+    def __init__(self):
+        self.doctreedir = None
+        self.events = None
+        self.extensions = {}
+        self.srcdir = None
+        self.config = Config()
+        self.project = Project(None, None)
+        self.registry = SphinxComponentRegistry()
 
 
 class FakeDirective(DocumenterBridge):
     def __init__(self) -> None:
         settings = Struct(tab_width=8)
         document = Struct(settings=settings)
-        env = BuildEnvironment()
-        env.config = Config()
+        app = FakeApplication()
+        app.config.add('autodoc_class_signature', 'mixed', True, None)
+        env = BuildEnvironment(app)  # type: ignore
         state = Struct(document=document)
         super().__init__(env, None, Options(), 0, state)
 
@@ -203,7 +224,7 @@ def get_documenter(app: Sphinx, obj: Any, parent: Any) -> Type[Documenter]:
     else:
         parent_doc = parent_doc_cls(FakeDirective(), "")
 
-    # Get the corrent documenter class for *obj*
+    # Get the correct documenter class for *obj*
     classes = [cls for cls in app.registry.documenters.values()
                if cls.can_document_member(obj, '', False, parent_doc)]
     if classes:
@@ -261,7 +282,7 @@ class Autosummary(SphinxDirective):
                         msg = __('autosummary: stub file not found %r. '
                                  'Check your autosummary_generate setting.')
 
-                    logger.warning(msg, real_name, location=self.get_source_info())
+                    logger.warning(msg, real_name, location=self.get_location())
                     continue
 
                 docnames.append(docname)
@@ -325,7 +346,7 @@ class Autosummary(SphinxDirective):
                 real_name, obj, parent, modname = self.import_by_name(name, prefixes=prefixes)
             except ImportError:
                 logger.warning(__('autosummary: failed to import %s'), name,
-                               location=self.get_source_info())
+                               location=self.get_location())
                 continue
 
             self.bridge.result = StringList()  # initialize for each documenter
@@ -339,12 +360,12 @@ class Autosummary(SphinxDirective):
             documenter = self.create_documenter(self.env.app, obj, parent, full_name)
             if not documenter.parse_name():
                 logger.warning(__('failed to parse name %s'), real_name,
-                               location=self.get_source_info())
+                               location=self.get_location())
                 items.append((display_name, '', '', real_name))
                 continue
             if not documenter.import_object():
                 logger.warning(__('failed to import object %s'), real_name,
-                               location=self.get_source_info())
+                               location=self.get_location())
                 items.append((display_name, '', '', real_name))
                 continue
             if documenter.options.members and not documenter.check_module():
@@ -423,9 +444,9 @@ class Autosummary(SphinxDirective):
         for name, sig, summary, real_name in items:
             qualifier = 'obj'
             if 'nosignatures' not in self.options:
-                col1 = ':%s:`%s <%s>`\\ %s' % (qualifier, name, real_name, rst.escape(sig))
+                col1 = ':py:%s:`%s <%s>`\\ %s' % (qualifier, name, real_name, rst.escape(sig))
             else:
-                col1 = ':%s:`%s <%s>`' % (qualifier, name, real_name)
+                col1 = ':py:%s:`%s <%s>`' % (qualifier, name, real_name)
             col2 = summary
             append_row(col1, col2)
 
@@ -437,10 +458,32 @@ def strip_arg_typehint(s: str) -> str:
     return s.split(':')[0].strip()
 
 
+def _cleanup_signature(s: str) -> str:
+    """Clean up signature using inspect.signautre() for mangle_signature()"""
+    try:
+        sig = signature_from_str(s)
+        parameters = list(sig.parameters.values())
+        for i, param in enumerate(parameters):
+            if param.annotation is not Parameter.empty:
+                # Remove typehints
+                param = param.replace(annotation=Parameter.empty)
+            if param.default is not Parameter.empty:
+                # Replace default value by "None"
+                param = param.replace(default=None)
+            parameters[i] = param
+        sig = sig.replace(parameters=parameters, return_annotation=Parameter.empty)
+        return str(sig)
+    except Exception:
+        # Return the original signature string if failed to clean (ex. parsing error)
+        return s
+
+
 def mangle_signature(sig: str, max_chars: int = 30) -> str:
     """Reformat a function signature to a more compact form."""
+    s = _cleanup_signature(sig)
+
     # Strip return type annotation
-    s = re.sub(r"\)\s*->\s.*$", ")", sig)
+    s = re.sub(r"\)\s*->\s.*$", ")", s)
 
     # Remove parenthesis
     s = re.sub(r"^\((.*)\)$", r"\1", s).strip()
@@ -521,7 +564,10 @@ def extract_summary(doc: List[str], document: Any) -> str:
 
     # parse the docstring
     node = parse(doc, document.settings)
-    if not isinstance(node[0], nodes.paragraph):
+    if isinstance(node[0], nodes.section):
+        # document starts with a section heading, so use that.
+        summary = node[0].astext().strip()
+    elif not isinstance(node[0], nodes.paragraph):
         # document starts with non-paragraph: pick up the first line
         summary = doc[0].strip()
     else:
@@ -537,7 +583,7 @@ def extract_summary(doc: List[str], document: Any) -> str:
                 node = parse(doc, document.settings)
                 if summary.endswith(WELL_KNOWN_ABBREVIATIONS):
                     pass
-                elif not node.traverse(nodes.system_message):
+                elif not list(node.traverse(nodes.system_message)):
                     # considered as that splitting by period does not break inline markups
                     break
 
@@ -549,7 +595,7 @@ def extract_summary(doc: List[str], document: Any) -> str:
 
 def limited_join(sep: str, items: List[str], max_chars: int = 30,
                  overflow_marker: str = "...") -> str:
-    """Join a number of strings to one, limiting the length to *max_chars*.
+    """Join a number of strings into one, limiting the length to *max_chars*.
 
     If the string overflows this limit, replace the last fitting item by
     *overflow_marker*.
@@ -662,8 +708,10 @@ def import_ivar_by_name(name: str, prefixes: List[str] = [None]) -> Tuple[str, A
         name, attr = name.rsplit(".", 1)
         real_name, obj, parent, modname = import_by_name(name, prefixes)
         qualname = real_name.replace(modname + ".", "")
-        analyzer = ModuleAnalyzer.for_module(modname)
-        if (qualname, attr) in analyzer.find_attr_docs():
+        analyzer = ModuleAnalyzer.for_module(getattr(obj, '__module__', modname))
+        analyzer.analyze()
+        # check for presence in `annotations` to include dataclass attributes
+        if (qualname, attr) in analyzer.attr_docs or (qualname, attr) in analyzer.annotations:
             return real_name + "." + attr, INSTANCEATTR, obj, modname
     except (ImportError, ValueError, PycodeError):
         pass

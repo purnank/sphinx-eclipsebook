@@ -142,7 +142,7 @@ class Theme:
 
 
 def is_archived_theme(filename: str) -> bool:
-    """Check the specified file is an archived theme file or not."""
+    """Check whether the specified file is an archived theme file or not."""
     try:
         with ZipFile(filename) as f:
             return THEMECONF in f.namelist()
@@ -155,7 +155,7 @@ class HTMLThemeFactory:
 
     def __init__(self, app: "Sphinx") -> None:
         self.app = app
-        self.themes = app.html_themes
+        self.themes = app.registry.html_themes
         self.load_builtin_themes()
         if getattr(app.config, 'html_theme_path', None):
             self.load_additional_themes(app.config.html_theme_path)
@@ -175,7 +175,7 @@ class HTMLThemeFactory:
                 self.themes[name] = theme
 
     def load_extra_theme(self, name: str) -> None:
-        """Try to load a theme having specifed name."""
+        """Try to load a theme with the specified name."""
         if name == 'alabaster':
             self.load_alabaster_theme()
         else:
@@ -187,7 +187,7 @@ class HTMLThemeFactory:
         self.themes['alabaster'] = path.join(alabaster.get_path(), 'alabaster')
 
     def load_sphinx_rtd_theme(self) -> None:
-        """Load sphinx_rtd_theme theme (if exists)."""
+        """Load sphinx_rtd_theme theme (if installed)."""
         try:
             import sphinx_rtd_theme
             theme_path = sphinx_rtd_theme.get_html_theme_path()

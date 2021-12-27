@@ -129,15 +129,15 @@ class TokenProcessor:
         lines = iter(buffers)
         self.buffers = buffers
         self.tokens = tokenize.generate_tokens(lambda: next(lines))
-        self.current: Token = None
-        self.previous: Token = None
+        self.current: Optional[Token] = None
+        self.previous: Optional[Token] = None
 
     def get_line(self, lineno: int) -> str:
         """Returns specified line."""
         return self.buffers[lineno - 1]
 
     def fetch_token(self) -> Token:
-        """Fetch a next token from source code.
+        """Fetch the next token from source code.
 
         Returns ``None`` if sequence finished.
         """
@@ -170,15 +170,15 @@ class TokenProcessor:
 
 
 class AfterCommentParser(TokenProcessor):
-    """Python source code parser to pick up comment after assignment.
+    """Python source code parser to pick up comments after assignments.
 
-    This parser takes a python code starts with assignment statement,
-    and returns the comments for variable if exists.
+    This parser takes code which starts with an assignment statement,
+    and returns the comment for the variable if one exists.
     """
 
     def __init__(self, lines: List[str]) -> None:
         super().__init__(lines)
-        self.comment: str = None
+        self.comment: Optional[str] = None
 
     def fetch_rvalue(self) -> List[Token]:
         """Fetch right-hand value of assignment."""
@@ -223,20 +223,20 @@ class VariableCommentPicker(ast.NodeVisitor):
         self.encoding = encoding
         self.context: List[str] = []
         self.current_classes: List[str] = []
-        self.current_function: ast.FunctionDef = None
+        self.current_function: Optional[ast.FunctionDef] = None
         self.comments: Dict[Tuple[str, str], str] = OrderedDict()
         self.annotations: Dict[Tuple[str, str], str] = {}
-        self.previous: ast.AST = None
+        self.previous: Optional[ast.AST] = None
         self.deforders: Dict[str, int] = {}
         self.finals: List[str] = []
         self.overloads: Dict[str, List[Signature]] = {}
-        self.typing: str = None
-        self.typing_final: str = None
-        self.typing_overload: str = None
+        self.typing: Optional[str] = None
+        self.typing_final: Optional[str] = None
+        self.typing_overload: Optional[str] = None
         super().__init__()
 
     def get_qualname_for(self, name: str) -> Optional[List[str]]:
-        """Get qualified name for given object as a list of string."""
+        """Get qualified name for given object as a list of string(s)."""
         if self.current_function:
             if self.current_classes and self.context[-1] == "__init__":
                 # store variable comments inside __init__ method of classes
@@ -308,8 +308,8 @@ class VariableCommentPicker(ast.NodeVisitor):
 
         return False
 
-    def get_self(self) -> ast.arg:
-        """Returns the name of first argument if in function."""
+    def get_self(self) -> Optional[ast.arg]:
+        """Returns the name of the first argument if in a function."""
         if self.current_function and self.current_function.args.args:
             return self.current_function.args.args[0]
         else:
@@ -320,12 +320,12 @@ class VariableCommentPicker(ast.NodeVisitor):
         return self.buffers[lineno - 1]
 
     def visit(self, node: ast.AST) -> None:
-        """Updates self.previous to ."""
+        """Updates self.previous to the given node."""
         super().visit(node)
         self.previous = node
 
     def visit_Import(self, node: ast.Import) -> None:
-        """Handles Import node and record it to definition orders."""
+        """Handles Import node and record the order of definitions."""
         for name in node.names:
             self.add_entry(name.asname or name.name)
 
@@ -337,7 +337,7 @@ class VariableCommentPicker(ast.NodeVisitor):
                 self.typing_overload = name.asname or name.name
 
     def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
-        """Handles Import node and record it to definition orders."""
+        """Handles Import node and record the order of definitions."""
         for name in node.names:
             self.add_entry(name.asname or name.name)
 
@@ -466,7 +466,7 @@ class DefinitionFinder(TokenProcessor):
 
     def __init__(self, lines: List[str]) -> None:
         super().__init__(lines)
-        self.decorator: Token = None
+        self.decorator: Optional[Token] = None
         self.context: List[str] = []
         self.indents: List = []
         self.definitions: Dict[str, Tuple[str, int, int]] = {}

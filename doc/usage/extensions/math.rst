@@ -200,6 +200,11 @@ Sphinx but is set to automatically include it from a third-party site.
 
    .. versionadded:: 1.8
 
+   .. versionchanged:: 4.4.1
+
+      Allow to change the loading method (async or defer) of MathJax if "async"
+      or "defer" key is set.
+
 .. confval:: mathjax3_config
 
    The configuration options for MathJax v3 (which is used by default).
@@ -220,7 +225,7 @@ Sphinx but is set to automatically include it from a third-party site.
    The value is used as a parameter of ``MathJax.Hub.Config()``.
    For more information, please read `Using in-line configuration options`__.
 
-   __ http://docs.mathjax.org/en/v2.7-latest/
+   __ https://docs.mathjax.org/en/v2.7-latest/
       configuration.html#using-in-line-configuration-options
 
    For example::

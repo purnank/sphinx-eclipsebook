@@ -8,7 +8,7 @@
     :license: BSD, see LICENSE for details.
 """
 
-from typing import TYPE_CHECKING, Any, Iterable, List, cast
+from typing import TYPE_CHECKING, Any, Iterable, List, Optional, cast
 
 from docutils import nodes
 from docutils.nodes import Element, Node
@@ -48,7 +48,7 @@ class TocTree:
 
     def resolve(self, docname: str, builder: "Builder", toctree: addnodes.toctree,
                 prune: bool = True, maxdepth: int = 0, titles_only: bool = False,
-                collapse: bool = False, includehidden: bool = False) -> Element:
+                collapse: bool = False, includehidden: bool = False) -> Optional[Element]:
         """Resolve a *toctree* node into individual bullet lists with titles
         as items, returning None (if no containing titles are found) or
         a new node.
@@ -193,13 +193,13 @@ class TocTree:
                         for toplevel in children:
                             # nodes with length 1 don't have any children anyway
                             if len(toplevel) > 1:
-                                subtrees = toplevel.traverse(addnodes.toctree)
+                                subtrees = list(toplevel.traverse(addnodes.toctree))
                                 if subtrees:
                                     toplevel[1][:] = subtrees  # type: ignore
                                 else:
                                     toplevel.pop(1)
                     # resolve all sub-toctrees
-                    for subtocnode in toc.traverse(addnodes.toctree):
+                    for subtocnode in list(toc.traverse(addnodes.toctree)):
                         if not (subtocnode.get('hidden', False) and
                                 not includehidden):
                             i = subtocnode.parent.index(subtocnode) + 1
@@ -313,7 +313,7 @@ class TocTree:
         return toc
 
     def get_toctree_for(self, docname: str, builder: "Builder", collapse: bool,
-                        **kwargs: Any) -> Element:
+                        **kwargs: Any) -> Optional[Element]:
         """Return the global TOC nodetree."""
         doctree = self.env.get_doctree(self.env.config.root_doc)
         toctrees: List[Element] = []

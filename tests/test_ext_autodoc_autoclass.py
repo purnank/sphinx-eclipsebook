@@ -10,6 +10,7 @@
 """
 
 import sys
+from typing import List, Union
 
 import pytest
 
@@ -211,8 +212,16 @@ def test_properties(app):
         '   docstring',
         '',
         '',
-        '   .. py:property:: Foo.prop',
+        '   .. py:property:: Foo.prop1',
         '      :module: target.properties',
+        '      :type: int',
+        '',
+        '      docstring',
+        '',
+        '',
+        '   .. py:property:: Foo.prop2',
+        '      :module: target.properties',
+        '      :classmethod:',
         '      :type: int',
         '',
         '      docstring',
@@ -234,6 +243,7 @@ def test_slots_attribute(app):
         '',
         '   .. py:attribute:: Bar.attr1',
         '      :module: target.slots',
+        '      :type: int',
         '',
         '      docstring of attr1',
         '',
@@ -256,10 +266,113 @@ def test_show_inheritance_for_subclass_of_generic_type(app):
         '.. py:class:: Quux(iterable=(), /)',
         '   :module: target.classes',
         '',
-        '   Bases: :class:`~typing.List`\\ '
-        '[:obj:`~typing.Union`\\ [:class:`int`, :class:`float`]]',
+        '   Bases: :py:class:`~typing.List`\\ '
+        '[:py:obj:`~typing.Union`\\ [:py:class:`int`, :py:class:`float`]]',
         '',
         '   A subclass of List[Union[int, float]]',
+        '',
+    ]
+
+
+@pytest.mark.skipif(sys.version_info < (3, 7), reason='python 3.7+ is required.')
+@pytest.mark.sphinx('html', testroot='ext-autodoc')
+def test_show_inheritance_for_decendants_of_generic_type(app):
+    options = {'show-inheritance': None}
+    actual = do_autodoc(app, 'class', 'target.classes.Corge', options)
+    assert list(actual) == [
+        '',
+        '.. py:class:: Corge(iterable=(), /)',
+        '   :module: target.classes',
+        '',
+        '   Bases: :py:class:`target.classes.Quux`',
+        '',
+    ]
+
+
+@pytest.mark.sphinx('html', testroot='ext-autodoc')
+def test_autodoc_process_bases(app):
+    def autodoc_process_bases(app, name, obj, options, bases):
+        assert name == 'target.classes.Quux'
+        assert obj.__module__ == 'target.classes'
+        assert obj.__name__ == 'Quux'
+        assert options == {'show-inheritance': True,
+                           'members': []}
+        assert bases == [List[Union[int, float]]]
+
+        bases.pop()
+        bases.extend([int, str])
+
+    app.connect('autodoc-process-bases', autodoc_process_bases)
+
+    options = {'show-inheritance': None}
+    actual = do_autodoc(app, 'class', 'target.classes.Quux', options)
+    if sys.version_info < (3, 7):
+        assert list(actual) == [
+            '',
+            '.. py:class:: Quux(*args, **kwds)',
+            '   :module: target.classes',
+            '',
+            '   Bases: :py:class:`int`, :py:class:`str`',
+            '',
+            '   A subclass of List[Union[int, float]]',
+            '',
+        ]
+    else:
+        assert list(actual) == [
+            '',
+            '.. py:class:: Quux(iterable=(), /)',
+            '   :module: target.classes',
+            '',
+            '   Bases: :py:class:`int`, :py:class:`str`',
+            '',
+            '   A subclass of List[Union[int, float]]',
+            '',
+        ]
+
+
+@pytest.mark.sphinx('html', testroot='ext-autodoc')
+def test_class_doc_from_class(app):
+    options = {"members": None,
+               "class-doc-from": "class"}
+    actual = do_autodoc(app, 'class', 'target.autoclass_content.C', options)
+    assert list(actual) == [
+        '',
+        '.. py:class:: C()',
+        '   :module: target.autoclass_content',
+        '',
+        '   A class having __init__, no __new__',
+        '',
+    ]
+
+
+@pytest.mark.sphinx('html', testroot='ext-autodoc')
+def test_class_doc_from_init(app):
+    options = {"members": None,
+               "class-doc-from": "init"}
+    actual = do_autodoc(app, 'class', 'target.autoclass_content.C', options)
+    assert list(actual) == [
+        '',
+        '.. py:class:: C()',
+        '   :module: target.autoclass_content',
+        '',
+        '   __init__ docstring',
+        '',
+    ]
+
+
+@pytest.mark.sphinx('html', testroot='ext-autodoc')
+def test_class_doc_from_both(app):
+    options = {"members": None,
+               "class-doc-from": "both"}
+    actual = do_autodoc(app, 'class', 'target.autoclass_content.C', options)
+    assert list(actual) == [
+        '',
+        '.. py:class:: C()',
+        '   :module: target.autoclass_content',
+        '',
+        '   A class having __init__, no __new__',
+        '',
+        '   __init__ docstring',
         '',
     ]
 
@@ -278,5 +391,59 @@ def test_class_alias(app):
         '.. py:attribute:: Alias',
         '   :module: target.classes',
         '',
-        '   alias of :class:`target.classes.Foo`',
+        '   alias of :py:class:`target.classes.Foo`',
+    ]
+
+
+def test_class_alias_having_doccomment(app):
+    actual = do_autodoc(app, 'class', 'target.classes.OtherAlias')
+    assert list(actual) == [
+        '',
+        '.. py:attribute:: OtherAlias',
+        '   :module: target.classes',
+        '',
+        '   docstring',
+        '',
+    ]
+
+
+@pytest.mark.sphinx('html', testroot='ext-autodoc')
+def test_coroutine(app):
+    options = {"members": None}
+    actual = do_autodoc(app, 'class', 'target.coroutine.AsyncClass', options)
+    assert list(actual) == [
+        '',
+        '.. py:class:: AsyncClass()',
+        '   :module: target.coroutine',
+        '',
+        '',
+        '   .. py:method:: AsyncClass.do_asyncgen()',
+        '      :module: target.coroutine',
+        '      :async:',
+        '',
+        '      A documented async generator',
+        '',
+        '',
+        '   .. py:method:: AsyncClass.do_coroutine()',
+        '      :module: target.coroutine',
+        '      :async:',
+        '',
+        '      A documented coroutine function',
+        '',
+        '',
+        '   .. py:method:: AsyncClass.do_coroutine2()',
+        '      :module: target.coroutine',
+        '      :async:',
+        '      :classmethod:',
+        '',
+        '      A documented coroutine classmethod',
+        '',
+        '',
+        '   .. py:method:: AsyncClass.do_coroutine3()',
+        '      :module: target.coroutine',
+        '      :async:',
+        '      :staticmethod:',
+        '',
+        '      A documented coroutine staticmethod',
+        '',
     ]

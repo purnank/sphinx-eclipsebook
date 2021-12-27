@@ -119,6 +119,7 @@ def test_singledispatch(app):
     assert list(actual) == [
         '',
         '.. py:function:: func(arg, kwarg=None)',
+        '                 func(arg: float, kwarg=None)',
         '                 func(arg: int, kwarg=None)',
         '                 func(arg: str, kwarg=None)',
         '   :module: target.singledispatch',
@@ -165,5 +166,40 @@ def test_wrapped_function_contextmanager(app):
         '   :module: target.wrappedfunction',
         '',
         "   You'll feel better in this context!",
+        '',
+    ]
+
+
+@pytest.mark.sphinx('html', testroot='ext-autodoc')
+def test_coroutine(app):
+    actual = do_autodoc(app, 'function', 'target.functions.coroutinefunc')
+    assert list(actual) == [
+        '',
+        '.. py:function:: coroutinefunc()',
+        '   :module: target.functions',
+        '   :async:',
+        '',
+    ]
+
+
+@pytest.mark.sphinx('html', testroot='ext-autodoc')
+def test_synchronized_coroutine(app):
+    actual = do_autodoc(app, 'function', 'target.coroutine.sync_func')
+    assert list(actual) == [
+        '',
+        '.. py:function:: sync_func()',
+        '   :module: target.coroutine',
+        '',
+    ]
+
+
+@pytest.mark.sphinx('html', testroot='ext-autodoc')
+def test_async_generator(app):
+    actual = do_autodoc(app, 'function', 'target.functions.asyncgenerator')
+    assert list(actual) == [
+        '',
+        '.. py:function:: asyncgenerator()',
+        '   :module: target.functions',
+        '   :async:',
         '',
     ]

@@ -210,6 +210,7 @@ also use these config values:
 
    .. versionadded:: 3.2
 
+.. _autosummary-customizing-templates:
 
 Customizing templates
 ---------------------
@@ -335,4 +336,4 @@ the title of a page.
    You can use the :rst:dir:`autosummary` directive in the stub pages.
    Stub pages are generated also based on these directives.
 
-.. _`escape filter`: http://jinja.pocoo.org/docs/2.9/templates/#escape
+.. _`escape filter`: https://jinja.palletsprojects.com/en/3.0.x/templates/#jinja-filters.escape

@@ -8,6 +8,7 @@
     :license: BSD, see LICENSE for details.
 """
 
+import re
 from typing import Any, Dict, List, Optional, Sequence, Tuple, Type, cast
 
 from docutils import nodes
@@ -31,7 +32,7 @@ class SphinxPostTransform(SphinxTransform):
     """A base class of post-transforms.
 
     Post transforms are invoked to modify the document to restructure it for outputting.
-    They do resolving references, convert images, special transformation for each output
+    They resolve references, convert images, do special transformation for each output
     formats and so on.  This class helps to implement these post transforms.
     """
     builders: Tuple[str, ...] = ()
@@ -51,7 +52,7 @@ class SphinxPostTransform(SphinxTransform):
         return True
 
     def run(self, **kwargs: Any) -> None:
-        """main method of post transforms.
+        """Main method of post transforms.
 
         Subclasses should override this method instead of ``apply()``.
         """
@@ -77,7 +78,8 @@ class ReferencesResolver(SphinxPostTransform):
 
             typ = node['reftype']
             target = node['reftarget']
-            refdoc = node.get('refdoc', self.env.docname)
+            node.setdefault('refdoc', self.env.docname)
+            refdoc = node.get('refdoc')
             domain = None
 
             try:
@@ -172,13 +174,26 @@ class ReferencesResolver(SphinxPostTransform):
         warn = node.get('refwarn')
         if self.config.nitpicky:
             warn = True
+            dtype = '%s:%s' % (domain.name, typ) if domain else typ
             if self.config.nitpick_ignore:
-                dtype = '%s:%s' % (domain.name, typ) if domain else typ
                 if (dtype, target) in self.config.nitpick_ignore:
                     warn = False
                 # for "std" types also try without domain name
                 if (not domain or domain.name == 'std') and \
                    (typ, target) in self.config.nitpick_ignore:
+                    warn = False
+            if self.config.nitpick_ignore_regex:
+                def matches_ignore(entry_type: str, entry_target: str) -> bool:
+                    for ignore_type, ignore_target in self.config.nitpick_ignore_regex:
+                        if re.fullmatch(ignore_type, entry_type) and \
+                           re.fullmatch(ignore_target, entry_target):
+                            return True
+                    return False
+                if matches_ignore(dtype, target):
+                    warn = False
+                # for "std" types also try without domain name
+                if (not domain or domain.name == 'std') and \
+                   matches_ignore(typ, target):
                     warn = False
         if not warn:
             return
@@ -216,7 +231,7 @@ class OnlyNodeTransform(SphinxPostTransform):
 
 
 class SigElementFallbackTransform(SphinxPostTransform):
-    """Fallback various desc_* nodes to inline if translator does not supported them."""
+    """Fallback various desc_* nodes to inline if translator does not support them."""
     default_priority = 200
 
     def run(self, **kwargs: Any) -> None:
@@ -249,7 +264,8 @@ class PropagateDescDomain(SphinxPostTransform):
 
     def run(self, **kwargs: Any) -> None:
         for node in self.document.traverse(addnodes.desc_signature):
-            node['classes'].append(node.parent['domain'])
+            if node.parent.get('domain'):
+                node['classes'].append(node.parent['domain'])
 
 
 def setup(app: Sphinx) -> Dict[str, Any]:

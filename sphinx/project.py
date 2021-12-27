@@ -10,7 +10,7 @@
 
 import os
 from glob import glob
-from typing import Dict, List, Set
+from typing import Dict, List, Optional, Set
 
 from sphinx.locale import __
 from sphinx.util import get_matching_files, logging, path_stabilize
@@ -22,7 +22,7 @@ EXCLUDE_PATHS = ['**/_sources', '.#*', '**/.#*', '*.lproj/**']
 
 
 class Project:
-    """A project is source code set of Sphinx document."""
+    """A project is the source code set of the Sphinx document(s)."""
 
     def __init__(self, srcdir: str, source_suffix: Dict[str, str]) -> None:
         #: Source directory.
@@ -60,8 +60,8 @@ class Project:
 
         return self.docnames
 
-    def path2doc(self, filename: str) -> str:
-        """Return the docname for the filename if the file is document.
+    def path2doc(self, filename: str) -> Optional[str]:
+        """Return the docname for the filename if the file is a document.
 
         *filename* should be absolute or relative to the source directory.
         """

@@ -8,7 +8,7 @@
     :license: BSD, see LICENSE for details.
 """
 
-from typing import Any, Dict, Iterator, List, Tuple, cast
+from typing import Any, Dict, Iterator, List, Optional, Tuple, cast
 
 from docutils import nodes
 from docutils.nodes import Element, Node
@@ -41,9 +41,6 @@ class JSObject(ObjectDescription[Tuple[str, str]]):
     #: added
     has_arguments = False
 
-    #: what is displayed right before the documentation entry
-    display_prefix: str = None
-
     #: If ``allow_nesting`` is ``True``, the object prefixes will be accumulated
     #: based on directive nesting
     allow_nesting = False
@@ -52,6 +49,10 @@ class JSObject(ObjectDescription[Tuple[str, str]]):
         'noindex': directives.flag,
         'noindexentry': directives.flag,
     }
+
+    def get_display_prefix(self) -> List[Node]:
+        #: what is displayed right before the documentation entry
+        return []
 
     def handle_signature(self, sig: str, signode: desc_signature) -> Tuple[str, str]:
         """Breaks down construct signatures
@@ -71,6 +72,7 @@ class JSObject(ObjectDescription[Tuple[str, str]]):
         # If construct is nested, prefix the current prefix
         prefix = self.env.ref_context.get('js:object', None)
         mod_name = self.env.ref_context.get('js:module')
+
         name = member
         try:
             member_prefix, member_name = member.rsplit('.', 1)
@@ -91,14 +93,22 @@ class JSObject(ObjectDescription[Tuple[str, str]]):
         signode['object'] = prefix
         signode['fullname'] = fullname
 
-        if self.display_prefix:
-            signode += addnodes.desc_annotation(self.display_prefix,
-                                                self.display_prefix)
+        display_prefix = self.get_display_prefix()
+        if display_prefix:
+            signode += addnodes.desc_annotation('', '', *display_prefix)
+
+        actual_prefix = None
         if prefix:
-            signode += addnodes.desc_addname(prefix + '.', prefix + '.')
+            actual_prefix = prefix
         elif mod_name:
-            signode += addnodes.desc_addname(mod_name + '.', mod_name + '.')
-        signode += addnodes.desc_name(name, name)
+            actual_prefix = mod_name
+        if actual_prefix:
+            addName = addnodes.desc_addname('', '')
+            for p in actual_prefix.split('.'):
+                addName += addnodes.desc_sig_name(p, p)
+                addName += addnodes.desc_sig_punctuation('.', '.')
+            signode += addName
+        signode += addnodes.desc_name('', '', addnodes.desc_sig_name(name, name))
         if self.has_arguments:
             if not arglist:
                 signode += addnodes.desc_parameterlist()
@@ -215,7 +225,7 @@ class JSCallable(JSObject):
         TypedField('arguments', label=_('Arguments'),
                    names=('argument', 'arg', 'parameter', 'param'),
                    typerolename='func', typenames=('paramtype', 'type')),
-        GroupedField('errors', label=_('Throws'), rolename='err',
+        GroupedField('errors', label=_('Throws'), rolename='func',
                      names=('throws', ),
                      can_collapse=True),
         Field('returnvalue', label=_('Returns'), has_arg=False,
@@ -227,8 +237,12 @@ class JSCallable(JSObject):
 
 class JSConstructor(JSCallable):
     """Like a callable but with a different prefix."""
-    display_prefix = 'class '
+
     allow_nesting = True
+
+    def get_display_prefix(self) -> List[Node]:
+        return [addnodes.desc_sig_keyword('class', 'class'),
+                addnodes.desc_sig_space()]
 
 
 class JSModule(SphinxDirective):
@@ -413,7 +427,7 @@ class JavaScriptDomain(Domain):
 
     def resolve_xref(self, env: BuildEnvironment, fromdocname: str, builder: Builder,
                      typ: str, target: str, node: pending_xref, contnode: Element
-                     ) -> Element:
+                     ) -> Optional[Element]:
         mod_name = node.get('js:module')
         prefix = node.get('js:object')
         searchorder = 1 if node.hasattr('refspecific') else 0

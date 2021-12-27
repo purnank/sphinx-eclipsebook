@@ -56,21 +56,24 @@ class NestedInlineTransform:
 
     def apply(self, **kwargs: Any) -> None:
         matcher = NodeMatcher(nodes.literal, nodes.emphasis, nodes.strong)
-        for node in self.document.traverse(matcher):  # type: TextElement
+        for node in list(self.document.traverse(matcher)):  # type: TextElement
             if any(matcher(subnode) for subnode in node):
                 pos = node.parent.index(node)
-                for subnode in reversed(node[1:]):
+                for subnode in reversed(list(node)):
                     node.remove(subnode)
                     if matcher(subnode):
                         node.parent.insert(pos + 1, subnode)
                     else:
                         newnode = node.__class__('', '', subnode, **node.attributes)
                         node.parent.insert(pos + 1, newnode)
+                # move node if all children became siblings of the node
+                if not len(node):
+                    node.parent.remove(node)
 
 
 class ManualPageTranslator(SphinxTranslator, BaseTranslator):
     """
-    Custom translator.
+    Custom man page translator.
     """
 
     _docinfo: Dict[str, Any] = {}
@@ -109,9 +112,10 @@ class ManualPageTranslator(SphinxTranslator, BaseTranslator):
     # overwritten -- added quotes around all .TH arguments
     def header(self) -> str:
         tmpl = (".TH \"%(title_upper)s\" \"%(manual_section)s\""
-                " \"%(date)s\" \"%(version)s\" \"%(manual_group)s\"\n"
-                ".SH NAME\n"
-                "%(title)s \\- %(subtitle)s\n")
+                " \"%(date)s\" \"%(version)s\" \"%(manual_group)s\"\n")
+        if self._docinfo['subtitle']:
+            tmpl += (".SH NAME\n"
+                     "%(title)s \\- %(subtitle)s\n")
         return tmpl % self._docinfo
 
     def visit_start_of_file(self, node: Element) -> None:
@@ -223,7 +227,7 @@ class ManualPageTranslator(SphinxTranslator, BaseTranslator):
 
     # overwritten -- don't make whole of term bold if it includes strong node
     def visit_term(self, node: Element) -> None:
-        if node.traverse(nodes.strong):
+        if list(node.traverse(nodes.strong)):
             self.body.append('\n')
         else:
             super().visit_term(node)

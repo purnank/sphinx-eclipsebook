@@ -59,7 +59,7 @@ class CatalogInfo(LocaleFileInfoBase):
             not path.exists(self.mo_path) or
             path.getmtime(self.mo_path) < path.getmtime(self.po_path))
 
-    def write_mo(self, locale: str) -> None:
+    def write_mo(self, locale: str, use_fuzzy: bool = False) -> None:
         with open(self.po_path, encoding=self.charset) as file_po:
             try:
                 po = read_po(file_po, locale)
@@ -69,7 +69,7 @@ class CatalogInfo(LocaleFileInfoBase):
 
         with open(self.mo_path, 'wb') as file_mo:
             try:
-                write_mo(file_mo, po)
+                write_mo(file_mo, po, use_fuzzy)
             except Exception as exc:
                 logger.warning(__('writing error: %s, %s'), self.mo_path, exc)
 
@@ -91,8 +91,11 @@ class CatalogRepository:
 
         for locale_dir in self._locale_dirs:
             locale_dir = path.join(self.basedir, locale_dir)
-            if path.exists(path.join(locale_dir, self.language, 'LC_MESSAGES')):
+            locale_path = path.join(locale_dir, self.language, 'LC_MESSAGES')
+            if path.exists(locale_path):
                 yield locale_dir
+            else:
+                logger.verbose(__('locale_dir %s does not exists'), locale_path)
 
     @property
     def pofiles(self) -> Generator[Tuple[str, str], None, None]:
@@ -126,7 +129,7 @@ def docname_to_domain(docname: str, compaction: Union[bool, str]) -> str:
         return docname
 
 
-# date_format mappings: ustrftime() to bable.dates.format_datetime()
+# date_format mappings: ustrftime() to babel.dates.format_datetime()
 date_format_mappings = {
     '%a':  'EEE',     # Weekday as locale’s abbreviated name.
     '%A':  'EEEE',    # Weekday as locale’s full name.

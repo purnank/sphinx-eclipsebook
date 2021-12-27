@@ -22,8 +22,8 @@ from datetime import datetime
 from importlib import import_module
 from os import path
 from time import mktime, strptime
-from typing import (IO, TYPE_CHECKING, Any, Callable, Dict, Iterable, Iterator, List, Pattern,
-                    Set, Tuple, Type)
+from typing import (IO, TYPE_CHECKING, Any, Callable, Dict, Iterable, Iterator, List, Optional,
+                    Pattern, Set, Tuple, Type)
 from urllib.parse import parse_qsl, quote_plus, urlencode, urlsplit, urlunsplit
 
 from sphinx.deprecation import RemovedInSphinx50Warning
@@ -59,7 +59,7 @@ def docname_join(basedocname: str, docname: str) -> str:
 
 
 def path_stabilize(filepath: str) -> str:
-    "normalize path separater and unicode string"
+    "Normalize path separator and unicode string"
     newpath = filepath.replace(os.path.sep, SEP)
     return unicodedata.normalize('NFC', newpath)
 
@@ -153,7 +153,7 @@ def md5(data=b'', **kwargs):
     """
 
     try:
-        return hashlib.md5(data, **kwargs)  # type: ignore
+        return hashlib.md5(data, **kwargs)
     except ValueError:
         return hashlib.md5(data, **kwargs, usedforsecurity=False)  # type: ignore
 
@@ -167,7 +167,7 @@ def sha1(data=b'', **kwargs):
     """
 
     try:
-        return hashlib.sha1(data, **kwargs)  # type: ignore
+        return hashlib.sha1(data, **kwargs)
     except ValueError:
         return hashlib.sha1(data, **kwargs, usedforsecurity=False)  # type: ignore
 
@@ -337,6 +337,23 @@ def parselinenos(spec: str, total: int) -> List[int]:
     return items
 
 
+def force_decode(string: str, encoding: str) -> str:
+    """Forcibly get a unicode string out of a bytestring."""
+    warnings.warn('force_decode() is deprecated.',
+                  RemovedInSphinx50Warning, stacklevel=2)
+    if isinstance(string, bytes):
+        try:
+            if encoding:
+                string = string.decode(encoding)
+            else:
+                # try decoding with utf-8, should only work for real UTF-8
+                string = string.decode()
+        except UnicodeError:
+            # last resort -- can't fail
+            string = string.decode('latin1')
+    return string
+
+
 def rpartition(s: str, t: str) -> Tuple[str, str]:
     """Similar to str.rpartition from 2.5, but doesn't return the separator."""
     warnings.warn('rpartition() is now deprecated.', RemovedInSphinx50Warning, stacklevel=2)
@@ -408,7 +425,7 @@ def import_object(objname: str, source: str = None) -> Any:
             raise ExtensionError('Could not import %s' % objname, exc) from exc
 
 
-def split_full_qualified_name(name: str) -> Tuple[str, str]:
+def split_full_qualified_name(name: str) -> Tuple[Optional[str], str]:
     """Split full qualified name to a pair of modname and qualname.
 
     A qualname is an abbreviation for "Qualified name" introduced at PEP-3155
@@ -418,7 +435,7 @@ def split_full_qualified_name(name: str) -> Tuple[str, str]:
     A "full" qualified name means a string containing both module name and
     qualified name.
 
-    .. note:: This function imports module actually to check the exisitence.
+    .. note:: This function actually imports the module to check its existence.
               Therefore you need to mock 3rd party modules if needed before
               calling this function.
     """

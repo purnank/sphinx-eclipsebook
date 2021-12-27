@@ -18,8 +18,10 @@ import types
 import typing
 import warnings
 from functools import partial, partialmethod
+from importlib import import_module
 from inspect import Parameter, isclass, ismethod, ismethoddescriptor, ismodule  # NOQA
 from io import StringIO
+from types import ModuleType
 from typing import Any, Callable, Dict, Mapping, Optional, Sequence, Tuple, Type, cast
 
 from sphinx.deprecation import RemovedInSphinx50Warning
@@ -184,6 +186,21 @@ def getmro(obj: Any) -> Tuple[Type, ...]:
         return tuple()
 
 
+def getorigbases(obj: Any) -> Optional[Tuple[Any, ...]]:
+    """Get __orig_bases__ from *obj* safely."""
+    if not inspect.isclass(obj):
+        return None
+
+    # Get __orig_bases__ from obj.__dict__ to avoid accessing the parent's __orig_bases__.
+    # refs: https://github.com/sphinx-doc/sphinx/issues/9607
+    __dict__ = safe_getattr(obj, '__dict__', {})
+    __orig_bases__ = __dict__.get('__orig_bases__')
+    if isinstance(__orig_bases__, tuple) and len(__orig_bases__) > 0:
+        return __orig_bases__
+    else:
+        return None
+
+
 def getslots(obj: Any) -> Optional[Dict]:
     """Get __slots__ attribute of the class as dict.
 
@@ -209,12 +226,15 @@ def getslots(obj: Any) -> Optional[Dict]:
 
 def isNewType(obj: Any) -> bool:
     """Check the if object is a kind of NewType."""
-    __module__ = safe_getattr(obj, '__module__', None)
-    __qualname__ = safe_getattr(obj, '__qualname__', None)
-    if __module__ == 'typing' and __qualname__ == 'NewType.<locals>.new_type':
-        return True
+    if sys.version_info >= (3, 10):
+        return isinstance(obj, typing.NewType)
     else:
-        return False
+        __module__ = safe_getattr(obj, '__module__', None)
+        __qualname__ = safe_getattr(obj, '__qualname__', None)
+        if __module__ == 'typing' and __qualname__ == 'NewType.<locals>.new_type':
+            return True
+        else:
+            return False
 
 
 def isenumclass(x: Any) -> bool:
@@ -243,12 +263,18 @@ def ispartial(obj: Any) -> bool:
     return isinstance(obj, (partial, partialmethod))
 
 
-def isclassmethod(obj: Any) -> bool:
+def isclassmethod(obj: Any, cls: Any = None, name: str = None) -> bool:
     """Check if the object is classmethod."""
     if isinstance(obj, classmethod):
         return True
     elif inspect.ismethod(obj) and obj.__self__ is not None and isclass(obj.__self__):
         return True
+    elif cls and name:
+        placeholder = object()
+        for basecls in getmro(cls):
+            meth = basecls.__dict__.get(name, placeholder)
+            if meth is not placeholder:
+                return isclassmethod(meth)
 
     return False
 
@@ -329,7 +355,7 @@ def is_singledispatch_function(obj: Any) -> bool:
     if (inspect.isfunction(obj) and
             hasattr(obj, 'dispatch') and
             hasattr(obj, 'register') and
-            obj.dispatch.__module__ == 'functools'):
+            obj.dispatch.__module__ == 'functools'):  # type: ignore
         return True
     else:
         return False
@@ -376,6 +402,16 @@ def iscoroutinefunction(obj: Any) -> bool:
     if hasattr(obj, '__code__') and inspect.iscoroutinefunction(obj):
         # check obj.__code__ because iscoroutinefunction() crashes for custom method-like
         # objects (see https://github.com/sphinx-doc/sphinx/issues/6605)
+        return True
+    else:
+        return False
+
+
+def isasyncgenfunction(obj: Any) -> bool:
+    """Check if the object is async-gen function."""
+    if hasattr(obj, '__code__') and inspect.isasyncgenfunction(obj):
+        # check obj.__code__ because isasyncgenfunction() crashes for custom method-like
+        # objects on python3.7 (see https://github.com/sphinx-doc/sphinx/issues/9838)
         return True
     else:
         return False
@@ -440,14 +476,14 @@ def object_description(object: Any) -> str:
                      (object_description(key), object_description(object[key]))
                      for key in sorted_keys)
             return "{%s}" % ", ".join(items)
-    if isinstance(object, set):
+    elif isinstance(object, set):
         try:
             sorted_values = sorted(object)
         except TypeError:
             pass  # Cannot sort set values, fall back to generic repr
         else:
             return "{%s}" % ", ".join(object_description(x) for x in sorted_values)
-    if isinstance(object, frozenset):
+    elif isinstance(object, frozenset):
         try:
             sorted_values = sorted(object)
         except TypeError:
@@ -455,6 +491,9 @@ def object_description(object: Any) -> str:
         else:
             return "frozenset({%s})" % ", ".join(object_description(x)
                                                  for x in sorted_values)
+    elif isinstance(object, enum.Enum):
+        return "%s.%s" % (object.__class__.__name__, object.name)
+
     try:
         s = repr(object)
     except Exception as exc:
@@ -499,6 +538,78 @@ class DefaultValue:
 
     def __repr__(self) -> str:
         return self.value
+
+
+class TypeAliasForwardRef:
+    """Pseudo typing class for autodoc_type_aliases.
+
+    This avoids the error on evaluating the type inside `get_type_hints()`.
+    """
+    def __init__(self, name: str) -> None:
+        self.name = name
+
+    def __call__(self) -> None:
+        # Dummy method to imitate special typing classes
+        pass
+
+    def __eq__(self, other: Any) -> bool:
+        return self.name == other
+
+
+class TypeAliasModule:
+    """Pseudo module class for autodoc_type_aliases."""
+
+    def __init__(self, modname: str, mapping: Dict[str, str]) -> None:
+        self.__modname = modname
+        self.__mapping = mapping
+
+        self.__module: Optional[ModuleType] = None
+
+    def __getattr__(self, name: str) -> Any:
+        fullname = '.'.join(filter(None, [self.__modname, name]))
+        if fullname in self.__mapping:
+            # exactly matched
+            return TypeAliasForwardRef(self.__mapping[fullname])
+        else:
+            prefix = fullname + '.'
+            nested = {k: v for k, v in self.__mapping.items() if k.startswith(prefix)}
+            if nested:
+                # sub modules or classes found
+                return TypeAliasModule(fullname, nested)
+            else:
+                # no sub modules or classes found.
+                try:
+                    # return the real submodule if exists
+                    return import_module(fullname)
+                except ImportError:
+                    # return the real class
+                    if self.__module is None:
+                        self.__module = import_module(self.__modname)
+
+                    return getattr(self.__module, name)
+
+
+class TypeAliasNamespace(Dict[str, Any]):
+    """Pseudo namespace class for autodoc_type_aliases.
+
+    This enables to look up nested modules and classes like `mod1.mod2.Class`.
+    """
+
+    def __init__(self, mapping: Dict[str, str]) -> None:
+        self.__mapping = mapping
+
+    def __getitem__(self, key: str) -> Any:
+        if key in self.__mapping:
+            # exactly matched
+            return TypeAliasForwardRef(self.__mapping[key])
+        else:
+            prefix = key + '.'
+            nested = {k: v for k, v in self.__mapping.items() if k.startswith(prefix)}
+            if nested:
+                # sub modules or classes found
+                return TypeAliasModule(key, nested)
+            else:
+                raise KeyError
 
 
 def _should_unwrap(subject: Callable) -> bool:
@@ -549,12 +660,19 @@ def signature(subject: Callable, bound_method: bool = False, follow_wrapped: boo
 
     try:
         # Resolve annotations using ``get_type_hints()`` and type_aliases.
-        annotations = typing.get_type_hints(subject, None, type_aliases)
+        localns = TypeAliasNamespace(type_aliases)
+        annotations = typing.get_type_hints(subject, None, localns)
         for i, param in enumerate(parameters):
             if param.name in annotations:
-                parameters[i] = param.replace(annotation=annotations[param.name])
+                annotation = annotations[param.name]
+                if isinstance(annotation, TypeAliasForwardRef):
+                    annotation = annotation.name
+                parameters[i] = param.replace(annotation=annotation)
         if 'return' in annotations:
-            return_annotation = annotations['return']
+            if isinstance(annotations['return'], TypeAliasForwardRef):
+                return_annotation = annotations['return'].name
+            else:
+                return_annotation = annotations['return']
     except Exception:
         # ``get_type_hints()`` does not support some kind of objects like partial,
         # ForwardRef and so on.
@@ -753,20 +871,44 @@ def getdoc(obj: Any, attrgetter: Callable = safe_getattr,
     * inherited docstring
     * inherited decorated methods
     """
-    doc = attrgetter(obj, '__doc__', None)
+    def getdoc_internal(obj: Any, attrgetter: Callable = safe_getattr) -> Optional[str]:
+        doc = attrgetter(obj, '__doc__', None)
+        if isinstance(doc, str):
+            return doc
+        else:
+            return None
+
+    if cls and name and isclassmethod(obj, cls, name):
+        for basecls in getmro(cls):
+            meth = basecls.__dict__.get(name)
+            if meth and hasattr(meth, '__func__'):
+                doc = getdoc(meth.__func__)
+                if doc is not None or not allow_inherited:
+                    return doc
+
+    doc = getdoc_internal(obj)
     if ispartial(obj) and doc == obj.__class__.__doc__:
         return getdoc(obj.func)
     elif doc is None and allow_inherited:
-        doc = inspect.getdoc(obj)
-
-        if doc is None and cls and name:
-            # inspect.getdoc() does not support some kind of inherited and decorated methods.
-            # This tries to obtain the docstring from super classes.
-            for basecls in getattr(cls, '__mro__', []):
+        if cls and name:
+            # Check a docstring of the attribute or method from super classes.
+            for basecls in getmro(cls):
                 meth = safe_getattr(basecls, name, None)
                 if meth is not None:
-                    doc = inspect.getdoc(meth)
-                    if doc:
+                    doc = getdoc_internal(meth)
+                    if doc is not None:
                         break
+
+            if doc is None:
+                # retry using `inspect.getdoc()`
+                for basecls in getmro(cls):
+                    meth = safe_getattr(basecls, name, None)
+                    if meth is not None:
+                        doc = inspect.getdoc(meth)
+                        if doc is not None:
+                            break
+
+        if doc is None:
+            doc = inspect.getdoc(obj)
 
     return doc

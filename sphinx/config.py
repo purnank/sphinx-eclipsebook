@@ -56,7 +56,7 @@ def is_serializable(obj: Any) -> bool:
 
 
 class ENUM:
-    """represents the config value should be a one of candidates.
+    """Represents the candidates which a config value should be one of.
 
     Example:
         app.add_config_value('latex_show_urls', 'no', None, ENUM('no', 'footnote', 'inline'))
@@ -103,6 +103,7 @@ class Config:
         'language': (None, 'env', [str]),
         'locale_dirs': (['locales'], 'env', []),
         'figure_language_filename': ('{root}.{language}{ext}', 'env', [str]),
+        'gettext_allow_fuzzy_translations': (False, 'gettext', []),
 
         'master_doc': ('index', 'env', []),
         'root_doc': (lambda config: config.master_doc, 'env', []),
@@ -131,6 +132,7 @@ class Config:
         'manpages_url': (None, 'env', []),
         'nitpicky': (False, None, []),
         'nitpick_ignore': ([], None, []),
+        'nitpick_ignore_regex': ([], None, []),
         'numfig': (False, 'env', []),
         'numfig_secnum_depth': (1, 'env', []),
         'numfig_format': ({}, 'env', []),  # will be initialized in init_numfig_format()
@@ -165,6 +167,9 @@ class Config:
     def read(cls, confdir: str, overrides: Dict = None, tags: Tags = None) -> "Config":
         """Create a Config object from configuration file."""
         filename = path.join(confdir, CONFIG_FILENAME)
+        if not path.isfile(filename):
+            raise ConfigError(__("config directory doesn't contain a conf.py file (%s)") %
+                              confdir)
         namespace = eval_config_file(filename, tags)
         return cls(namespace, overrides or {})
 
@@ -211,7 +216,8 @@ class Config:
 
     def pre_init_values(self) -> None:
         """
-        Initialize some limited config variables before initialize i18n and loading extensions
+        Initialize some limited config variables before initializing i18n and loading
+        extensions.
         """
         variables = ['needs_sphinx', 'suppress_warnings', 'language', 'locale_dirs']
         for name in variables:
@@ -309,7 +315,7 @@ class Config:
         self.__dict__.update(state)
 
 
-def eval_config_file(filename: str, tags: Tags) -> Dict[str, Any]:
+def eval_config_file(filename: str, tags: Optional[Tags]) -> Dict[str, Any]:
     """Evaluate a config file."""
     namespace: Dict[str, Any] = {}
     namespace['__file__'] = filename
@@ -339,7 +345,7 @@ def eval_config_file(filename: str, tags: Tags) -> Dict[str, Any]:
 
 
 def convert_source_suffix(app: "Sphinx", config: Config) -> None:
-    """This converts old styled source_suffix to new styled one.
+    """Convert old styled source_suffix to new styled one.
 
     * old style: str or list
     * new style: a dict which maps from fileext to filetype
@@ -367,7 +373,7 @@ def convert_highlight_options(app: "Sphinx", config: Config) -> None:
     """Convert old styled highlight_options to new styled one.
 
     * old style: options
-    * new style: dict that maps language names to options
+    * new style: a dict which maps from language name to options
     """
     options = config.highlight_options
     if options and not all(isinstance(v, dict) for v in options.values()):
@@ -388,7 +394,7 @@ def init_numfig_format(app: "Sphinx", config: Config) -> None:
 
 
 def correct_copyright_year(app: "Sphinx", config: Config) -> None:
-    """correct values of copyright year that are not coherent with
+    """Correct values of copyright year that are not coherent with
     the SOURCE_DATE_EPOCH environment variable (if set)
 
     See https://reproducible-builds.org/specs/source-date-epoch/
@@ -401,7 +407,7 @@ def correct_copyright_year(app: "Sphinx", config: Config) -> None:
 
 
 def check_confval_types(app: "Sphinx", config: Config) -> None:
-    """check all values for deviation from the default value's type, since
+    """Check all values for deviation from the default value's type, since
     that can result in TypeErrors all over the place NB.
     """
     for confval in config:
@@ -410,7 +416,7 @@ def check_confval_types(app: "Sphinx", config: Config) -> None:
         if hasattr(default, '__call__'):
             default = default(config)  # evaluate default value
         if default is None and not annotations:
-            continue  # neither inferrable nor expliclitly annotated types
+            continue  # neither inferable nor expliclitly annotated types
 
         if annotations is Any:
             # any type of value is accepted
@@ -465,7 +471,7 @@ def check_primary_domain(app: "Sphinx", config: Config) -> None:
 def check_root_doc(app: "Sphinx", env: "BuildEnvironment", added: Set[str],
                    changed: Set[str], removed: Set[str]) -> Set[str]:
     """Adjust root_doc to 'contents' to support an old project which does not have
-    no root_doc setting.
+    any root_doc setting.
     """
     if (app.config.root_doc == 'index' and
             'index' not in app.project.docnames and

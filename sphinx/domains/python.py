@@ -15,17 +15,18 @@ import sys
 import typing
 import warnings
 from inspect import Parameter
-from typing import Any, Dict, Iterable, Iterator, List, NamedTuple, Tuple, Type, cast
+from typing import Any, Dict, Iterable, Iterator, List, NamedTuple, Optional, Tuple, Type, cast
 
 from docutils import nodes
 from docutils.nodes import Element, Node
 from docutils.parsers.rst import directives
+from docutils.parsers.rst.states import Inliner
 
 from sphinx import addnodes
 from sphinx.addnodes import desc_signature, pending_xref, pending_xref_condition
 from sphinx.application import Sphinx
 from sphinx.builders import Builder
-from sphinx.deprecation import RemovedInSphinx50Warning
+from sphinx.deprecation import RemovedInSphinx50Warning, RemovedInSphinx60Warning
 from sphinx.directives import ObjectDescription
 from sphinx.domains import Domain, Index, IndexEntry, ObjType
 from sphinx.environment import BuildEnvironment
@@ -117,22 +118,38 @@ def _parse_annotation(annotation: str, env: BuildEnvironment = None) -> List[Nod
             result.extend(unparse(node.right))
             return result
         elif isinstance(node, ast.BitOr):
-            return [nodes.Text(' '), addnodes.desc_sig_punctuation('', '|'), nodes.Text(' ')]
+            return [addnodes.desc_sig_space(),
+                    addnodes.desc_sig_punctuation('', '|'),
+                    addnodes.desc_sig_space()]
         elif isinstance(node, ast.Constant):  # type: ignore
             if node.value is Ellipsis:
                 return [addnodes.desc_sig_punctuation('', "...")]
+            elif isinstance(node.value, bool):
+                return [addnodes.desc_sig_keyword('', repr(node.value))]
+            elif isinstance(node.value, int):
+                return [addnodes.desc_sig_literal_number('', repr(node.value))]
+            elif isinstance(node.value, str):
+                return [addnodes.desc_sig_literal_string('', repr(node.value))]
             else:
-                return [nodes.Text(node.value)]
+                # handles None, which is further handled by type_to_xref later
+                # and fallback for other types that should be converted
+                return [nodes.Text(repr(node.value))]
         elif isinstance(node, ast.Expr):
             return unparse(node.value)
         elif isinstance(node, ast.Index):
             return unparse(node.value)
         elif isinstance(node, ast.List):
             result = [addnodes.desc_sig_punctuation('', '[')]
-            for elem in node.elts:
-                result.extend(unparse(elem))
-                result.append(addnodes.desc_sig_punctuation('', ', '))
-            result.pop()
+            if node.elts:
+                # check if there are elements in node.elts to only pop the
+                # last element of result if the for-loop was run at least
+                # once
+                for elem in node.elts:
+                    result.extend(unparse(elem))
+                    result.append(addnodes.desc_sig_punctuation('', ','))
+                    result.append(addnodes.desc_sig_space())
+                result.pop()
+                result.pop()
             result.append(addnodes.desc_sig_punctuation('', ']'))
             return result
         elif isinstance(node, ast.Module):
@@ -144,13 +161,21 @@ def _parse_annotation(annotation: str, env: BuildEnvironment = None) -> List[Nod
             result.append(addnodes.desc_sig_punctuation('', '['))
             result.extend(unparse(node.slice))
             result.append(addnodes.desc_sig_punctuation('', ']'))
+
+            # Wrap the Text nodes inside brackets by literal node if the subscript is a Literal
+            if result[0] in ('Literal', 'typing.Literal'):
+                for i, subnode in enumerate(result[1:], start=1):
+                    if isinstance(subnode, nodes.Text):
+                        result[i] = nodes.literal('', '', subnode)
             return result
         elif isinstance(node, ast.Tuple):
             if node.elts:
                 result = []
                 for elem in node.elts:
                     result.extend(unparse(elem))
-                    result.append(addnodes.desc_sig_punctuation('', ', '))
+                    result.append(addnodes.desc_sig_punctuation('', ','))
+                    result.append(addnodes.desc_sig_space())
+                result.pop()
                 result.pop()
             else:
                 result = [addnodes.desc_sig_punctuation('', '('),
@@ -174,7 +199,9 @@ def _parse_annotation(annotation: str, env: BuildEnvironment = None) -> List[Nod
         tree = ast_parse(annotation)
         result = unparse(tree)
         for i, node in enumerate(result):
-            if isinstance(node, nodes.Text) and node.strip():
+            if isinstance(node, nodes.literal):
+                result[i] = node[0]
+            elif isinstance(node, nodes.Text) and node.strip():
                 result[i] = type_to_xref(str(node), env)
         return result
     except SyntaxError:
@@ -209,13 +236,13 @@ def _parse_arglist(arglist: str, env: BuildEnvironment = None) -> addnodes.desc_
         if param.annotation is not param.empty:
             children = _parse_annotation(param.annotation, env)
             node += addnodes.desc_sig_punctuation('', ':')
-            node += nodes.Text(' ')
+            node += addnodes.desc_sig_space()
             node += addnodes.desc_sig_name('', '', *children)  # type: ignore
         if param.default is not param.empty:
             if param.annotation is not param.empty:
-                node += nodes.Text(' ')
+                node += addnodes.desc_sig_space()
                 node += addnodes.desc_sig_operator('', '=')
-                node += nodes.Text(' ')
+                node += addnodes.desc_sig_space()
             else:
                 node += addnodes.desc_sig_operator('', '=')
             node += nodes.inline('', param.default, classes=['default_value'],
@@ -258,7 +285,8 @@ def _pseudo_parse_arglist(signode: desc_signature, arglist: str) -> None:
                 ends_open += 1
                 argument = argument[:-1].strip()
             if argument:
-                stack[-1] += addnodes.desc_parameter(argument, argument)
+                stack[-1] += addnodes.desc_parameter(
+                    '', '', addnodes.desc_sig_name(argument, argument))
             while ends_open:
                 stack.append(addnodes.desc_optional())
                 stack[-2] += stack[-1]
@@ -284,9 +312,13 @@ def _pseudo_parse_arglist(signode: desc_signature, arglist: str) -> None:
 class PyXrefMixin:
     def make_xref(self, rolename: str, domain: str, target: str,
                   innernode: Type[TextlikeNode] = nodes.emphasis,
-                  contnode: Node = None, env: BuildEnvironment = None) -> Node:
+                  contnode: Node = None, env: BuildEnvironment = None,
+                  inliner: Inliner = None, location: Node = None) -> Node:
+        # we use inliner=None to make sure we get the old behaviour with a single
+        # pending_xref node
         result = super().make_xref(rolename, domain, target,  # type: ignore
-                                   innernode, contnode, env)
+                                   innernode, contnode,
+                                   env, inliner=None, location=None)
         result['refspecific'] = True
         result['py:module'] = env.ref_context.get('py:module')
         result['py:class'] = env.ref_context.get('py:class')
@@ -296,30 +328,45 @@ class PyXrefMixin:
                 text = target[1:]
             elif prefix == '~':
                 text = target.split('.')[-1]
-            for node in result.traverse(nodes.Text):
+            for node in list(result.traverse(nodes.Text)):
                 node.parent[node.parent.index(node)] = nodes.Text(text)
                 break
+        elif isinstance(result, pending_xref) and env.config.python_use_unqualified_type_names:
+            children = result.children
+            result.clear()
+
+            shortname = target.split('.')[-1]
+            textnode = innernode('', shortname)
+            contnodes = [pending_xref_condition('', '', textnode, condition='resolved'),
+                         pending_xref_condition('', '', *children, condition='*')]
+            result.extend(contnodes)
+
         return result
 
     def make_xrefs(self, rolename: str, domain: str, target: str,
                    innernode: Type[TextlikeNode] = nodes.emphasis,
-                   contnode: Node = None, env: BuildEnvironment = None) -> List[Node]:
-        delims = r'(\s*[\[\]\(\),](?:\s*or\s)?\s*|\s+or\s+|\.\.\.)'
+                   contnode: Node = None, env: BuildEnvironment = None,
+                   inliner: Inliner = None, location: Node = None) -> List[Node]:
+        delims = r'(\s*[\[\]\(\),](?:\s*or\s)?\s*|\s+or\s+|\s*\|\s*|\.\.\.)'
         delims_re = re.compile(delims)
         sub_targets = re.split(delims, target)
 
         split_contnode = bool(contnode and contnode.astext() == target)
 
+        in_literal = False
         results = []
         for sub_target in filter(None, sub_targets):
             if split_contnode:
                 contnode = nodes.Text(sub_target)
 
-            if delims_re.match(sub_target):
+            if in_literal or delims_re.match(sub_target):
                 results.append(contnode or innernode(sub_target, sub_target))
             else:
                 results.append(self.make_xref(rolename, domain, sub_target,
-                                              innernode, contnode, env))
+                                              innernode, contnode, env, inliner, location))
+
+            if sub_target in ('Literal', 'typing.Literal'):
+                in_literal = True
 
         return results
 
@@ -327,12 +374,14 @@ class PyXrefMixin:
 class PyField(PyXrefMixin, Field):
     def make_xref(self, rolename: str, domain: str, target: str,
                   innernode: Type[TextlikeNode] = nodes.emphasis,
-                  contnode: Node = None, env: BuildEnvironment = None) -> Node:
+                  contnode: Node = None, env: BuildEnvironment = None,
+                  inliner: Inliner = None, location: Node = None) -> Node:
         if rolename == 'class' and target == 'None':
             # None is not a type, so use obj role instead.
             rolename = 'obj'
 
-        return super().make_xref(rolename, domain, target, innernode, contnode, env)
+        return super().make_xref(rolename, domain, target, innernode, contnode,
+                                 env, inliner, location)
 
 
 class PyGroupedField(PyXrefMixin, GroupedField):
@@ -342,12 +391,14 @@ class PyGroupedField(PyXrefMixin, GroupedField):
 class PyTypedField(PyXrefMixin, TypedField):
     def make_xref(self, rolename: str, domain: str, target: str,
                   innernode: Type[TextlikeNode] = nodes.emphasis,
-                  contnode: Node = None, env: BuildEnvironment = None) -> Node:
+                  contnode: Node = None, env: BuildEnvironment = None,
+                  inliner: Inliner = None, location: Node = None) -> Node:
         if rolename == 'class' and target == 'None':
             # None is not a type, so use obj role instead.
             rolename = 'obj'
 
-        return super().make_xref(rolename, domain, target, innernode, contnode, env)
+        return super().make_xref(rolename, domain, target, innernode, contnode,
+                                 env, inliner, location)
 
 
 class PyObject(ObjectDescription[Tuple[str, str]]):
@@ -386,11 +437,11 @@ class PyObject(ObjectDescription[Tuple[str, str]]):
 
     allow_nesting = False
 
-    def get_signature_prefix(self, sig: str) -> str:
+    def get_signature_prefix(self, sig: str) -> List[nodes.Node]:
         """May return a prefix to put before the object name in the
         signature.
         """
-        return ''
+        return []
 
     def needs_arglist(self) -> bool:
         """May return true if an empty argument list is to be generated even if
@@ -444,16 +495,23 @@ class PyObject(ObjectDescription[Tuple[str, str]]):
 
         sig_prefix = self.get_signature_prefix(sig)
         if sig_prefix:
-            signode += addnodes.desc_annotation(sig_prefix, sig_prefix)
+            if type(sig_prefix) is str:
+                warnings.warn(
+                    "Python directive method get_signature_prefix()"
+                    " returning a string is deprecated."
+                    " It must now return a list of nodes."
+                    " Return value was '{}'.".format(sig_prefix),
+                    RemovedInSphinx60Warning)
+                signode += addnodes.desc_annotation(sig_prefix, '',  # type: ignore
+                                                    nodes.Text(sig_prefix))  # type: ignore
+            else:
+                signode += addnodes.desc_annotation(str(sig_prefix), '', *sig_prefix)
 
         if prefix:
             signode += addnodes.desc_addname(prefix, prefix)
-        elif add_module and self.env.config.add_module_names:
-            if modname and modname != 'exceptions':
-                # exceptions are a special case, since they are documented in the
-                # 'exceptions' module.
-                nodetext = modname + '.'
-                signode += addnodes.desc_addname(nodetext, nodetext)
+        elif modname and add_module and self.env.config.add_module_names:
+            nodetext = modname + '.'
+            signode += addnodes.desc_addname(nodetext, nodetext)
 
         signode += addnodes.desc_name(name, name)
         if arglist:
@@ -478,7 +536,9 @@ class PyObject(ObjectDescription[Tuple[str, str]]):
 
         anno = self.options.get('annotation')
         if anno:
-            signode += addnodes.desc_annotation(' ' + anno, ' ' + anno)
+            signode += addnodes.desc_annotation(' ' + anno, '',
+                                                addnodes.desc_sig_space(),
+                                                nodes.Text(anno))
 
         return fullname, prefix
 
@@ -580,11 +640,12 @@ class PyFunction(PyObject):
         'async': directives.flag,
     })
 
-    def get_signature_prefix(self, sig: str) -> str:
+    def get_signature_prefix(self, sig: str) -> List[nodes.Node]:
         if 'async' in self.options:
-            return 'async '
+            return [addnodes.desc_sig_keyword('', 'async'),
+                    addnodes.desc_sig_space()]
         else:
-            return ''
+            return []
 
     def needs_arglist(self) -> bool:
         return True
@@ -641,11 +702,17 @@ class PyVariable(PyObject):
         typ = self.options.get('type')
         if typ:
             annotations = _parse_annotation(typ, self.env)
-            signode += addnodes.desc_annotation(typ, '', nodes.Text(': '), *annotations)
+            signode += addnodes.desc_annotation(typ, '',
+                                                addnodes.desc_sig_punctuation('', ':'),
+                                                addnodes.desc_sig_space(), *annotations)
 
         value = self.options.get('value')
         if value:
-            signode += addnodes.desc_annotation(value, ' = ' + value)
+            signode += addnodes.desc_annotation(value, '',
+                                                addnodes.desc_sig_space(),
+                                                addnodes.desc_sig_punctuation('', '='),
+                                                addnodes.desc_sig_space(),
+                                                nodes.Text(value))
 
         return fullname, prefix
 
@@ -669,11 +736,12 @@ class PyClasslike(PyObject):
 
     allow_nesting = True
 
-    def get_signature_prefix(self, sig: str) -> str:
+    def get_signature_prefix(self, sig: str) -> List[nodes.Node]:
         if 'final' in self.options:
-            return 'final %s ' % self.objtype
+            return [nodes.Text('final'), addnodes.desc_sig_space(),
+                    nodes.Text(self.objtype), addnodes.desc_sig_space()]
         else:
-            return '%s ' % self.objtype
+            return [nodes.Text(self.objtype), addnodes.desc_sig_space()]
 
     def get_index_text(self, modname: str, name_cls: Tuple[str, str]) -> str:
         if self.objtype == 'class':
@@ -705,25 +773,27 @@ class PyMethod(PyObject):
         else:
             return True
 
-    def get_signature_prefix(self, sig: str) -> str:
-        prefix = []
+    def get_signature_prefix(self, sig: str) -> List[nodes.Node]:
+        prefix: List[nodes.Node] = []
         if 'final' in self.options:
-            prefix.append('final')
+            prefix.append(nodes.Text('final'))
+            prefix.append(addnodes.desc_sig_space())
         if 'abstractmethod' in self.options:
-            prefix.append('abstract')
+            prefix.append(nodes.Text('abstract'))
+            prefix.append(addnodes.desc_sig_space())
         if 'async' in self.options:
-            prefix.append('async')
+            prefix.append(nodes.Text('async'))
+            prefix.append(addnodes.desc_sig_space())
         if 'classmethod' in self.options:
-            prefix.append('classmethod')
+            prefix.append(nodes.Text('classmethod'))
+            prefix.append(addnodes.desc_sig_space())
         if 'property' in self.options:
-            prefix.append('property')
+            prefix.append(nodes.Text('property'))
+            prefix.append(addnodes.desc_sig_space())
         if 'staticmethod' in self.options:
-            prefix.append('static')
-
-        if prefix:
-            return ' '.join(prefix) + ' '
-        else:
-            return ''
+            prefix.append(nodes.Text('static'))
+            prefix.append(addnodes.desc_sig_space())
+        return prefix
 
     def get_index_text(self, modname: str, name_cls: Tuple[str, str]) -> str:
         name, cls = name_cls
@@ -740,7 +810,7 @@ class PyMethod(PyObject):
         if 'classmethod' in self.options:
             return _('%s() (%s class method)') % (methname, clsname)
         elif 'property' in self.options:
-            return _('%s() (%s property)') % (methname, clsname)
+            return _('%s (%s property)') % (methname, clsname)
         elif 'staticmethod' in self.options:
             return _('%s() (%s static method)') % (methname, clsname)
         else:
@@ -802,11 +872,18 @@ class PyAttribute(PyObject):
         typ = self.options.get('type')
         if typ:
             annotations = _parse_annotation(typ, self.env)
-            signode += addnodes.desc_annotation(typ, '', nodes.Text(': '), *annotations)
+            signode += addnodes.desc_annotation(typ, '',
+                                                addnodes.desc_sig_punctuation('', ':'),
+                                                addnodes.desc_sig_space(),
+                                                *annotations)
 
         value = self.options.get('value')
         if value:
-            signode += addnodes.desc_annotation(value, ' = ' + value)
+            signode += addnodes.desc_annotation(value, '',
+                                                addnodes.desc_sig_space(),
+                                                addnodes.desc_sig_punctuation('', '='),
+                                                addnodes.desc_sig_space(),
+                                                nodes.Text(value))
 
         return fullname, prefix
 
@@ -831,6 +908,7 @@ class PyProperty(PyObject):
     option_spec = PyObject.option_spec.copy()
     option_spec.update({
         'abstractmethod': directives.flag,
+        'classmethod': directives.flag,
         'type': directives.unchanged,
     })
 
@@ -839,16 +917,26 @@ class PyProperty(PyObject):
 
         typ = self.options.get('type')
         if typ:
-            signode += addnodes.desc_annotation(typ, ': ' + typ)
+            annotations = _parse_annotation(typ, self.env)
+            signode += addnodes.desc_annotation(typ, '',
+                                                addnodes.desc_sig_punctuation('', ':'),
+                                                addnodes.desc_sig_space(),
+                                                *annotations)
 
         return fullname, prefix
 
-    def get_signature_prefix(self, sig: str) -> str:
-        prefix = ['property']
+    def get_signature_prefix(self, sig: str) -> List[nodes.Node]:
+        prefix: List[nodes.Node] = []
         if 'abstractmethod' in self.options:
-            prefix.insert(0, 'abstract')
+            prefix.append(nodes.Text('abstract'))
+            prefix.append(addnodes.desc_sig_space())
+        if 'classmethod' in self.options:
+            prefix.append(nodes.Text('class'))
+            prefix.append(addnodes.desc_sig_space())
 
-        return ' '.join(prefix) + ' '
+        prefix.append(nodes.Text('property'))
+        prefix.append(addnodes.desc_sig_space())
+        return prefix
 
     def get_index_text(self, modname: str, name_cls: Tuple[str, str]) -> str:
         name, cls = name_cls
@@ -1028,7 +1116,7 @@ class PythonModuleIndex(Index):
         # list of all modules, sorted by module name
         modules = sorted(self.domain.data['modules'].items(),
                          key=lambda x: x[0].lower())
-        # sort out collapsable modules
+        # sort out collapsible modules
         prev_modname = ''
         num_toplevels = 0
         for modname, (docname, node_id, synopsis, platforms, deprecated) in modules:
@@ -1246,7 +1334,7 @@ class PythonDomain(Domain):
 
     def resolve_xref(self, env: BuildEnvironment, fromdocname: str, builder: Builder,
                      type: str, target: str, node: pending_xref, contnode: Element
-                     ) -> Element:
+                     ) -> Optional[Element]:
         modname = node.get('py:module')
         clsname = node.get('py:class')
         searchmode = 1 if node.hasattr('refspecific') else 0
@@ -1344,7 +1432,7 @@ class PythonDomain(Domain):
                 else:
                     yield (refname, refname, obj.objtype, obj.docname, obj.node_id, 1)
 
-    def get_full_qualified_name(self, node: Element) -> str:
+    def get_full_qualified_name(self, node: Element) -> Optional[str]:
         modname = node.get('py:module')
         clsname = node.get('py:class')
         target = node.get('reftarget')
@@ -1362,10 +1450,6 @@ def builtin_resolver(app: Sphinx, env: BuildEnvironment,
             s = s.split('.', 1)[1]
 
         return s in typing.__all__  # type: ignore
-
-    content = find_pending_xref_condition(node, 'resolved')
-    if content:
-        contnode = content.children[0]  # type: ignore
 
     if node.get('refdomain') != 'py':
         return None
