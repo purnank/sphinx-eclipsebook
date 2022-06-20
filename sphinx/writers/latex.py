@@ -2060,6 +2060,9 @@ class LaTeXTranslator(SphinxTranslator):
             .replace(r'\textbackslash{}textasciitilde\{\}',r'\textasciitilde{}')\
             .replace(r'\textbackslash{}sphinxhyphen\{\}',r'\sphinxhyphen{}')\
             .replace('\\textbackslash{}\\', '\\')\
+            .replace('\\textbackslash{}textendash\{\}', '\\textendash{}')\
+            .replace(r'\{{[}\}', r'[')\
+            .replace(r'\{{]}\}', r']')\
 
 #M-
 
@@ -2067,6 +2070,8 @@ class LaTeXTranslator(SphinxTranslator):
         text = self.encode(node.astext())
 #M+
         if self.visiting_reference:
+            text = self.escape_uri(text)
+        elif len(self.tables) == 1:
             text = self.escape_uri(text)
 #M-
         self.body.append(text)
