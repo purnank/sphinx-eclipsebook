@@ -316,7 +316,11 @@ General configuration
    * ``app.add_role``
    * ``app.add_generic_role``
    * ``app.add_source_parser``
+   * ``autosectionlabel.*``
    * ``download.not_readable``
+   * ``epub.unknown_project_files``
+   * ``epub.duplicated_toc_entry``
+   * ``i18n.inconsistent_references``
    * ``image.not_readable``
    * ``ref.term``
    * ``ref.ref``
@@ -332,11 +336,9 @@ General configuration
    * ``toc.excluded``
    * ``toc.not_readable``
    * ``toc.secnum``
-   * ``epub.unknown_project_files``
-   * ``epub.duplicated_toc_entry``
-   * ``autosectionlabel.*``
 
-   You can choose from these types.
+   You can choose from these types.  You can also give only the first
+   component to exclude all warnings attached to it.
 
    Now, this option should be considered *experimental*.
 
@@ -366,6 +368,10 @@ General configuration
 
       Added ``toc.excluded`` and ``toc.not_readable``
 
+   .. versionadded:: 4.5
+
+      Added ``i18n.inconsistent_references``
+
 .. confval:: needs_sphinx
 
    If set to a ``major.minor`` version string like ``'1.1'``, Sphinx will
@@ -392,7 +398,7 @@ General configuration
 
 .. confval:: manpages_url
 
-   A URL to cross-reference :rst:role:`manpage` directives. If this is
+   A URL to cross-reference :rst:role:`manpage` roles. If this is
    defined to ``https://manpages.debian.org/{path}``, the
    :literal:`:manpage:`man(1)`` role will link to
    <https://manpages.debian.org/man(1)>. The patterns available are:
@@ -546,7 +552,7 @@ General configuration
          make latex O="-D smartquotes_action="
 
       This can follow some ``make html`` with no problem, in contrast to the
-      situation from the prior note.  It requires Docutils 0.14 or later.
+      situation from the prior note.
 
    .. versionadded:: 1.6.6
 
@@ -719,13 +725,15 @@ documentation on :ref:`intl` for details.
    (e.g. the German version of ``myfigure.png`` will be ``myfigure.de.png``
    by default setting) and substitute them for original figures.  In the LaTeX
    builder, a suitable language will be selected as an option for the *Babel*
-   package.  Default is ``None``, which means that no translation will be done.
+   package.  Default is ``'en'``.
 
    .. versionadded:: 0.5
 
    .. versionchanged:: 1.4
 
       Support figure substitution
+
+   .. versionchanged:: 5.0
 
    Currently supported languages by Sphinx are:
 
@@ -739,7 +747,7 @@ documentation on :ref:`intl` for details.
    * ``da`` -- Danish
    * ``de`` -- German
    * ``el`` -- Greek
-   * ``en`` -- English
+   * ``en`` -- English (default)
    * ``eo`` -- Esperanto
    * ``es`` -- Spanish
    * ``et`` -- Estonian
@@ -1005,7 +1013,7 @@ that use Sphinx's HTMLWriter class.
    to indicate the location of document using `The Canonical Link Relation`_.
    Default: ``''``.
 
-   .. _The Canonical Link Relation: https://tools.ietf.org/html/rfc6596
+   .. _The Canonical Link Relation: https://datatracker.ietf.org/doc/html/rfc6596
 
    .. versionadded:: 1.8
 
@@ -1350,6 +1358,13 @@ that use Sphinx's HTMLWriter class.
    ``True``.
 
    .. versionadded:: 1.0
+
+.. confval:: html_show_search_summary
+
+   If true, the text around the keyword is shown as summary of each search result.
+   Default is ``True``.
+
+   .. versionadded:: 4.5
 
 .. confval:: html_show_sphinx
 
@@ -2517,6 +2532,13 @@ These options influence Texinfo output.
 
    .. versionadded:: 1.1
 
+.. confval:: texinfo_cross_references
+
+  If false, do not generate inline references in a document.  That makes
+  an info file more readable with stand-alone reader (``info``).
+  Default is ``True``.
+
+  .. versionadded:: 4.4
 
 .. _qthelp-options:
 
@@ -2697,9 +2719,22 @@ Options for the linkcheck builder
    doubling the wait time between attempts until it succeeds or exceeds the
    ``linkcheck_rate_limit_timeout``. By default, the timeout is 5 minutes.
 
-   .. _Retry-After: https://tools.ietf.org/html/rfc7231#section-7.1.3
+   .. _Retry-After: https://datatracker.ietf.org/doc/html/rfc7231#section-7.1.3
 
    .. versionadded:: 3.4
+
+.. confval:: linkcheck_exclude_documents
+
+   A list of regular expressions that match documents in which Sphinx should
+   not check the validity of links. This can be used for permitting link decay
+   in legacy or historical sections of the documentation.
+
+   Example::
+
+      # ignore all links in documents located in a subfolder named 'legacy'
+      linkcheck_exclude_documents = [r'.*/legacy/.*']
+
+   .. versionadded:: 4.4
 
 
 Options for the XML builder

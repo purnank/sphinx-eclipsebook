@@ -1,12 +1,4 @@
-"""
-    sphinx.builders.gettext
-    ~~~~~~~~~~~~~~~~~~~~~~~
-
-    The MessageCatalogBuilder class.
-
-    :copyright: Copyright 2007-2021 by the Sphinx team, see AUTHORS.
-    :license: BSD, see LICENSE for details.
-"""
+"""The MessageCatalogBuilder class."""
 
 from codecs import open
 from collections import OrderedDict, defaultdict
@@ -61,11 +53,15 @@ class Catalog:
         if msg not in self.metadata:  # faster lookup in hash
             self.messages.append(msg)
             self.metadata[msg] = []
-        self.metadata[msg].append((origin.source, origin.line, origin.uid))  # type: ignore
+        line = origin.line
+        if line is None:
+            line = -1
+        self.metadata[msg].append((origin.source, line, origin.uid))  # type: ignore
 
     def __iter__(self) -> Generator[Message, None, None]:
         for message in self.messages:
-            positions = [(source, line) for source, line, uuid in self.metadata[message]]
+            positions = sorted(set((source, line) for source, line, uuid
+                                   in self.metadata[message]))
             uuids = [uuid for source, line, uuid in self.metadata[message]]
             yield Message(message, positions, uuids)
 
@@ -146,7 +142,7 @@ class I18nBuilder(Builder):
     def write_doc(self, docname: str, doctree: nodes.document) -> None:
         catalog = self.catalogs[docname_to_domain(docname, self.config.gettext_compact)]
 
-        for toctree in self.env.tocs[docname].traverse(addnodes.toctree):
+        for toctree in self.env.tocs[docname].findall(addnodes.toctree):
             for node, msg in extract_messages(toctree):
                 node.uid = ''  # type: ignore  # Hack UUID model
                 catalog.add(msg, node)
@@ -157,7 +153,7 @@ class I18nBuilder(Builder):
         if 'index' in self.env.config.gettext_additional_targets:
             # Extract translatable messages from index entries.
             for node, entries in traverse_translatable_index(doctree):
-                for typ, msg, tid, main, key_ in entries:
+                for typ, msg, _tid, _main, _key in entries:
                     for m in split_index_msg(typ, msg):
                         if typ == 'pair' and m in pairindextypes.values():
                             # avoid built-in translated message was incorporated
@@ -227,7 +223,7 @@ class MessageCatalogBuilder(I18nBuilder):
         template_files = set()
         for template_path in self.config.templates_path:
             tmpl_abs_path = path.join(self.app.srcdir, template_path)
-            for dirpath, dirs, files in walk(tmpl_abs_path):
+            for dirpath, _dirs, files in walk(tmpl_abs_path):
                 for fn in files:
                     if fn.endswith('.html'):
                         filename = canon_path(path.join(dirpath, fn))
@@ -247,7 +243,7 @@ class MessageCatalogBuilder(I18nBuilder):
             try:
                 with open(template, encoding='utf-8') as f:
                     context = f.read()
-                for line, meth, msg in extract_translations(context):
+                for line, _meth, msg in extract_translations(context):
                     origin = MsgOrigin(template, line)
                     self.catalogs['sphinx'].add(msg, origin)
             except Exception as exc:

@@ -201,6 +201,25 @@ also use these config values:
 
    .. versionadded:: 2.1
 
+   .. versionchanged:: 4.4
+
+      If ``autosummary_ignore_module_all`` is ``False``, this configuration
+      value is ignored for members listed in ``__all__``.
+
+.. confval:: autosummary_ignore_module_all
+
+   If ``False`` and a module has the ``__all__`` attribute set, autosummary
+   documents every member listed in ``__all__`` and no others. Default is
+   ``True``
+
+   Note that if an imported member is listed in ``__all__``, it will be
+   documented regardless of the value of ``autosummary_imported_members``. To
+   match the behaviour of ``from module import *``, set
+   ``autosummary_ignore_module_all`` to False and
+   ``autosummary_imported_members`` to True.
+
+   .. versionadded:: 4.4
+
 .. confval:: autosummary_filename_map
 
    A dict mapping object names to filenames. This is necessary to avoid
@@ -236,7 +255,7 @@ Autosummary uses the following Jinja template files:
 - :file:`autosummary/attribute.rst` -- template for class attributes
 - :file:`autosummary/method.rst` -- template for class methods
 
-The following variables available in the templates:
+The following variables are available in the templates:
 
 .. currentmodule:: None
 
@@ -281,7 +300,7 @@ The following variables available in the templates:
 .. data:: functions
 
    List containing names of "public" functions in the module.  Here, "public"
-   here means that the name does not start with an underscore. Only available
+   means that the name does not start with an underscore. Only available
    for modules.
 
 .. data:: classes

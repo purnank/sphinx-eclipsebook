@@ -1,16 +1,6 @@
-"""
-    sphinx.domains.std
-    ~~~~~~~~~~~~~~~~~~
-
-    The standard domain.
-
-    :copyright: Copyright 2007-2021 by the Sphinx team, see AUTHORS.
-    :license: BSD, see LICENSE for details.
-"""
+"""The standard domain."""
 
 import re
-import unicodedata
-import warnings
 from copy import copy
 from typing import (TYPE_CHECKING, Any, Callable, Dict, Iterable, Iterator, List, Optional,
                     Tuple, Type, Union, cast)
@@ -22,7 +12,6 @@ from docutils.statemachine import StringList
 
 from sphinx import addnodes
 from sphinx.addnodes import desc_signature, pending_xref
-from sphinx.deprecation import RemovedInSphinx50Warning
 from sphinx.directives import ObjectDescription
 from sphinx.domains import Domain, ObjType
 from sphinx.locale import _, __
@@ -66,13 +55,6 @@ class GenericObject(ObjectDescription[str]):
     def add_target_and_index(self, name: str, sig: str, signode: desc_signature) -> None:
         node_id = make_id(self.env, self.state.document, self.objtype, name)
         signode['ids'].append(node_id)
-
-        # Assign old styled node_id not to break old hyperlinks (if possible)
-        # Note: Will be removed in Sphinx-5.0 (RemovedInSphinx50Warning)
-        old_node_id = self.make_old_id(name)
-        if old_node_id not in self.state.document.ids and old_node_id not in signode['ids']:
-            signode['ids'].append(old_node_id)
-
         self.state.document.note_explicit_target(signode)
 
         if self.indextemplate:
@@ -140,13 +122,6 @@ class Target(SphinxDirective):
         node_id = make_id(self.env, self.state.document, self.name, fullname)
         node = nodes.target('', '', ids=[node_id])
         self.set_source_info(node)
-
-        # Assign old styled node_id not to break old hyperlinks (if possible)
-        # Note: Will be removed in Sphinx-5.0 (RemovedInSphinx50Warning)
-        old_node_id = self.make_old_id(fullname)
-        if old_node_id not in self.state.document.ids and old_node_id not in node['ids']:
-            node['ids'].append(old_node_id)
-
         self.state.document.note_explicit_target(node)
         ret: List[Node] = [node]
         if self.indextemplate:
@@ -243,7 +218,7 @@ class Cmdoption(ObjectDescription[str]):
             descr = _('%s command line option') % currprogram
         else:
             descr = _('command line option')
-        for option in sig.split(', '):
+        for option in signode.get('allnames', []):
             entry = '; '.join([descr, option])
             self.indexnode['entries'].append(('pair', entry, signode['ids'][0], '', None))
 
@@ -336,6 +311,7 @@ class Glossary(SphinxDirective):
     def run(self) -> List[Node]:
         node = addnodes.glossary()
         node.document = self.state.document
+        node['sorted'] = ('sorted' in self.options)
 
         # This directive implements a custom format of the reST definition list
         # that allows multiple lines of terms before the definition.  This is
@@ -400,9 +376,8 @@ class Glossary(SphinxDirective):
             was_empty = False
 
         # now, parse all the entries into a big definition list
-        items = []
+        items: List[nodes.definition_list_item] = []
         for terms, definition in entries:
-            termtexts: List[str] = []
             termnodes: List[Node] = []
             system_messages: List[Node] = []
             for line, source, lineno in terms:
@@ -416,7 +391,6 @@ class Glossary(SphinxDirective):
                                           node_id=None, document=self.state.document)
                 term.rawsource = line
                 system_messages.extend(sysmsg)
-                termtexts.append(term.astext())
                 termnodes.append(term)
 
             termnodes.extend(system_messages)
@@ -426,16 +400,10 @@ class Glossary(SphinxDirective):
                 self.state.nested_parse(definition, definition.items[0][1],
                                         defnode)
             termnodes.append(defnode)
-            items.append((termtexts,
-                          nodes.definition_list_item('', *termnodes)))
+            items.append(nodes.definition_list_item('', *termnodes))
 
-        if 'sorted' in self.options:
-            items.sort(key=lambda x:
-                       unicodedata.normalize('NFD', x[0][0].lower()))
-
-        dlist = nodes.definition_list()
+        dlist = nodes.definition_list('', *items)
         dlist['classes'].append('glossary')
-        dlist.extend(item[1] for item in items)
         node += dlist
         return messages + [node]
 
@@ -448,7 +416,7 @@ def token_xrefs(text: str, productionGroup: str = '') -> List[Node]:
     for m in token_re.finditer(text):
         if m.start() > pos:
             txt = text[pos:m.start()]
-            retnodes.append(nodes.Text(txt, txt))
+            retnodes.append(nodes.Text(txt))
         token = m.group(1)
         if ':' in token:
             if token[0] == '~':
@@ -469,7 +437,7 @@ def token_xrefs(text: str, productionGroup: str = '') -> List[Node]:
         retnodes.append(refnode)
         pos = m.end()
     if pos < len(text):
-        retnodes.append(nodes.Text(text[pos:], text[pos:]))
+        retnodes.append(nodes.Text(text[pos:]))
     return retnodes
 
 
@@ -510,14 +478,6 @@ class ProductionList(SphinxDirective):
                 prefix = 'grammar-token-%s' % productionGroup
                 node_id = make_id(self.env, self.state.document, prefix, name)
                 subnode['ids'].append(node_id)
-
-                # Assign old styled node_id not to break old hyperlinks (if possible)
-                # Note: Will be removed in Sphinx-5.0 (RemovedInSphinx50Warning)
-                old_node_id = self.make_old_id(name)
-                if (old_node_id not in self.state.document.ids and
-                        old_node_id not in subnode['ids']):
-                    subnode['ids'].append(old_node_id)
-
                 self.state.document.note_implicit_target(subnode, subnode)
 
                 if len(productionGroup) != 0:
@@ -675,11 +635,6 @@ class StandardDomain(Domain):
                            objtype, name, docname, location=location)
         self.objects[objtype, name] = (self.env.docname, labelid)
 
-    def add_object(self, objtype: str, name: str, docname: str, labelid: str) -> None:
-        warnings.warn('StandardDomain.add_object() is deprecated.',
-                      RemovedInSphinx50Warning, stacklevel=2)
-        self.objects[objtype, name] = (docname, labelid)
-
     @property
     def _terms(self) -> Dict[str, Tuple[str, str]]:
         """.. note:: Will be removed soon. internal use only."""
@@ -775,7 +730,7 @@ class StandardDomain(Domain):
                 if not sectname:
                     continue
             else:
-                toctree = next(iter(node.traverse(addnodes.toctree)), None)
+                toctree = next(node.findall(addnodes.toctree), None)
                 if toctree and toctree.get('caption'):
                     sectname = toctree.get('caption')
                 else:

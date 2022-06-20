@@ -1,12 +1,4 @@
-"""
-    sphinx.util.logging
-    ~~~~~~~~~~~~~~~~~~~
-
-    Logging utility functions for Sphinx.
-
-    :copyright: Copyright 2007-2021 by the Sphinx team, see AUTHORS.
-    :license: BSD, see LICENSE for details.
-"""
+"""Logging utility functions for Sphinx."""
 
 import logging
 import logging.handlers
@@ -111,7 +103,14 @@ class SphinxInfoLogRecord(SphinxLogRecord):
 
 class SphinxWarningLogRecord(SphinxLogRecord):
     """Warning log record class supporting location"""
-    prefix = 'WARNING: '
+    @property
+    def prefix(self) -> str:  # type: ignore
+        if self.levelno >= logging.CRITICAL:
+            return 'CRITICAL: '
+        elif self.levelno >= logging.ERROR:
+            return 'ERROR: '
+        else:
+            return 'WARNING: '
 
 
 class SphinxLoggerAdapter(logging.LoggerAdapter):
@@ -368,12 +367,8 @@ def is_suppressed_warning(type: str, subtype: str, suppress_warnings: List[str])
         else:
             target, subtarget = warning_type, None
 
-        if target == type:
-            if ((subtype is None and subtarget is None) or
-                    subtarget is None or
-                    subtarget == subtype or
-                    subtarget == '*'):
-                return True
+        if target == type and subtarget in (None, subtype, "*"):
+            return True
 
     return False
 
