@@ -300,6 +300,7 @@ class LaTeXTranslator(SphinxTranslator):
 
 #M+
         self.visiting_reference = None
+        self.visiting_menuselection = False
 #M-
         # flags
         self.in_title = 0
@@ -2028,6 +2029,7 @@ class LaTeXTranslator(SphinxTranslator):
         classes = node.get('classes', [])
         if classes in [['menuselection']]:
             self.body.append(r'\sphinxmenuselection{')
+            self.visiting_menuselection = True
             self.context.append('}')
         elif classes in [['guilabel']]:
             self.body.append(r'\sphinxguilabel{')
@@ -2042,6 +2044,7 @@ class LaTeXTranslator(SphinxTranslator):
             self.context.append('')
 
     def depart_inline(self, node: Element) -> None:
+        self.visiting_menuselection = False
         self.body.append(self.context.pop())
 
     def visit_generated(self, node: Element) -> None:
@@ -2125,6 +2128,9 @@ class LaTeXTranslator(SphinxTranslator):
             text = self.escape_uri(text)
         elif len(self.tables) == 1:
             text = self.escape_uri(text)
+        if self.visiting_menuselection:
+            text = text\
+                .replace(r'\textbackslash{}','\\')
 #M-
         self.body.append(text)
 
