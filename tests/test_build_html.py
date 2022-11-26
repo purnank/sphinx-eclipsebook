@@ -6,10 +6,8 @@ from itertools import chain, cycle
 from unittest.mock import ANY, call, patch
 
 import docutils
-import pygments
 import pytest
 from html5lib import HTMLParser
-from packaging import version
 
 from sphinx.builders.html import validate_html_extra_path, validate_html_static_path
 from sphinx.errors import ConfigError
@@ -21,9 +19,6 @@ if docutils.__version_info__ < (0, 17):
     FIGURE_CAPTION = ".//div[@class='figure align-default']/p[@class='caption']"
 else:
     FIGURE_CAPTION = ".//figure/figcaption/p"
-
-
-PYGMENTS_VERSION = version.parse(pygments.__version__).release
 
 
 ENV_WARNINGS = """\
@@ -39,7 +34,7 @@ with "\\?": b?'here: >>>(\\\\|/)xbb<<<((\\\\|/)r)?'
 """
 
 HTML_WARNINGS = ENV_WARNINGS + """\
-%(root)s/index.rst:\\d+: WARNING: unknown option: &option
+%(root)s/index.rst:\\d+: WARNING: unknown option: '&option'
 %(root)s/index.rst:\\d+: WARNING: citation not found: missing
 %(root)s/index.rst:\\d+: WARNING: a suitable image for html builder not found: foo.\\*
 %(root)s/index.rst:\\d+: WARNING: Could not lex literal_block as "c". Highlighting skipped.
@@ -79,7 +74,7 @@ def tail_check(check):
         for node in nodes:
             if node.tail and rex.search(node.tail):
                 return True
-        assert False, '%r not found in tail of any nodes %s' % (check, nodes)
+        raise AssertionError('%r not found in tail of any nodes %s' % (check, nodes))
     return checker
 
 
@@ -114,9 +109,9 @@ def check_xpath(etree, fname, path, check, be_found=True):
             if all(not rex.search(get_text(node)) for node in nodes):
                 return
 
-        assert False, ('%r not found in any node matching '
-                       'path %s in %s: %r' % (check, path, fname,
-                                              [node.text for node in nodes]))
+        raise AssertionError(('%r not found in any node matching '
+                              'path %s in %s: %r' % (check, path, fname,
+                                                     [node.text for node in nodes])))
 
 
 @pytest.mark.sphinx('html', testroot='warnings')
@@ -134,6 +129,16 @@ def test_html_warnings(app, warning):
 @pytest.mark.sphinx('html', confoverrides={'html4_writer': True})
 def test_html4_output(app, status, warning):
     app.build()
+
+
+def test_html4_deprecation(make_app, tempdir):
+    (tempdir / 'conf.py').write_text('', encoding='utf-8')
+    app = make_app(
+        buildername='html',
+        srcdir=tempdir,
+        confoverrides={'html4_writer': True},
+    )
+    assert 'HTML 4 output is deprecated and will be removed' in app._warning.getvalue()
 
 
 @pytest.mark.parametrize("fname,expect", flat_dict({
@@ -1227,7 +1232,8 @@ def test_assets_order(app):
 
     # js_files
     expected = ['_static/early.js', '_static/jquery.js', '_static/underscore.js',
-                '_static/doctools.js', 'https://example.com/script.js', '_static/normal.js',
+                '_static/doctools.js', '_static/sphinx_highlight.js',
+                'https://example.com/script.js', '_static/normal.js',
                 '_static/late.js', '_static/js/custom.js', '_static/lazy.js']
     pattern = '.*'.join('src="%s"' % f for f in expected)
     assert re.search(pattern, content, re.S)
@@ -1391,6 +1397,15 @@ def test_html_remote_images(app, status, warning):
     assert not (app.outdir / 'python-logo.png').exists()
 
 
+@pytest.mark.sphinx('html', testroot='image-escape')
+def test_html_encoded_image(app, status, warning):
+    app.builder.build_all()
+
+    result = (app.outdir / 'index.html').read_text()
+    assert ('<img alt="_images/img_%231.png" src="_images/img_%231.png" />' in result)
+    assert (app.outdir / '_images/img_#1.png').exists()
+
+
 @pytest.mark.sphinx('html', testroot='remote-logo')
 def test_html_remote_logo(app, status, warning):
     app.builder.build_all()
@@ -1520,7 +1535,7 @@ def test_html_math_renderer_is_duplicated(make_app, app_params):
     try:
         args, kwargs = app_params
         make_app(*args, **kwargs)
-        assert False
+        raise AssertionError()
     except ConfigError as exc:
         assert str(exc) == ('Many math_renderers are registered. '
                             'But no math_renderer is selected.')
@@ -1550,7 +1565,7 @@ def test_html_math_renderer_is_mismatched(make_app, app_params):
     try:
         args, kwargs = app_params
         make_app(*args, **kwargs)
-        assert False
+        raise AssertionError()
     except ConfigError as exc:
         assert str(exc) == "Unknown math_renderer 'imgmath' is given."
 
@@ -1631,13 +1646,10 @@ def test_html_codeblock_linenos_style_table(app):
     app.build()
     content = (app.outdir / 'index.html').read_text(encoding='utf8')
 
-    if PYGMENTS_VERSION >= (2, 8):
-        assert ('<div class="linenodiv"><pre><span class="normal">1</span>\n'
-                '<span class="normal">2</span>\n'
-                '<span class="normal">3</span>\n'
-                '<span class="normal">4</span></pre></div>') in content
-    else:
-        assert '<div class="linenodiv"><pre>1\n2\n3\n4</pre></div>' in content
+    assert ('<div class="linenodiv"><pre><span class="normal">1</span>\n'
+            '<span class="normal">2</span>\n'
+            '<span class="normal">3</span>\n'
+            '<span class="normal">4</span></pre></div>') in content
 
 
 @pytest.mark.sphinx('html', testroot='reST-code-block',
@@ -1646,10 +1658,7 @@ def test_html_codeblock_linenos_style_inline(app):
     app.build()
     content = (app.outdir / 'index.html').read_text(encoding='utf8')
 
-    if PYGMENTS_VERSION > (2, 7):
-        assert '<span class="linenos">1</span>' in content
-    else:
-        assert '<span class="lineno">1 </span>' in content
+    assert '<span class="linenos">1</span>' in content
 
 
 @pytest.mark.sphinx('html', testroot='highlight_options')
@@ -1735,3 +1744,71 @@ def test_html_code_role(app):
     assert ('<div class="highlight-python notranslate">' +
             '<div class="highlight"><pre><span></span>' +
             common_content) in content
+
+
+@pytest.mark.sphinx('html', testroot='root',
+                    confoverrides={'option_emphasise_placeholders': True})
+def test_option_emphasise_placeholders(app, status, warning):
+    app.build()
+    content = (app.outdir / 'objects.html').read_text()
+    assert '<em><span class="pre">TYPE</span></em>' in content
+    assert '{TYPE}' not in content
+    assert ('<em><span class="pre">WHERE</span></em>'
+            '<span class="pre">-</span>'
+            '<em><span class="pre">COUNT</span></em>' in content)
+    assert '<span class="pre">{{value}}</span>' in content
+    assert ('<span class="pre">--plugin.option</span></span>'
+            '<a class="headerlink" href="#cmdoption-perl-plugin.option" title="Permalink to this definition">¶</a></dt>') in content
+
+
+@pytest.mark.sphinx('html', testroot='root')
+def test_option_emphasise_placeholders_default(app, status, warning):
+    app.build()
+    content = (app.outdir / 'objects.html').read_text()
+    assert '<span class="pre">={TYPE}</span>' in content
+    assert '<span class="pre">={WHERE}-{COUNT}</span></span>' in content
+    assert '<span class="pre">{client_name}</span>' in content
+    assert ('<span class="pre">--plugin.option</span></span>'
+            '<span class="sig-prename descclassname"></span>'
+            '<a class="headerlink" href="#cmdoption-perl-plugin.option" title="Permalink to this definition">¶</a></dt>') in content
+
+
+@pytest.mark.sphinx('html', testroot='root')
+def test_option_reference_with_value(app, status, warning):
+    app.build()
+    content = (app.outdir / 'objects.html').read_text()
+    assert ('<span class="pre">-mapi</span></span><span class="sig-prename descclassname">'
+            '</span><a class="headerlink" href="#cmdoption-git-commit-mapi"') in content
+    assert 'first option <a class="reference internal" href="#cmdoption-git-commit-mapi">' in content
+    assert ('<a class="reference internal" href="#cmdoption-git-commit-mapi">'
+            '<code class="xref std std-option docutils literal notranslate"><span class="pre">-mapi[=xxx]</span></code></a>') in content
+    assert '<span class="pre">-mapi</span> <span class="pre">with_space</span>' in content
+
+
+@pytest.mark.sphinx('html', testroot='theming')
+def test_theme_options(app, status, warning):
+    app.build()
+
+    result = (app.outdir / '_static' / 'documentation_options.js').read_text(encoding='utf8')
+    assert 'NAVIGATION_WITH_KEYS: false' in result
+    assert 'ENABLE_SEARCH_SHORTCUTS: true' in result
+
+
+@pytest.mark.sphinx('html', testroot='theming',
+                    confoverrides={'html_theme_options.navigation_with_keys': True,
+                                   'html_theme_options.enable_search_shortcuts': False})
+def test_theme_options_with_override(app, status, warning):
+    app.build()
+
+    result = (app.outdir / '_static' / 'documentation_options.js').read_text(encoding='utf8')
+    assert 'NAVIGATION_WITH_KEYS: true' in result
+    assert 'ENABLE_SEARCH_SHORTCUTS: false' in result
+
+
+@pytest.mark.sphinx('html', testroot='build-html-theme-having-multiple-stylesheets')
+def test_theme_having_multiple_stylesheets(app):
+    app.build()
+    content = (app.outdir / 'index.html').read_text(encoding='utf-8')
+
+    assert '<link rel="stylesheet" type="text/css" href="_static/mytheme.css" />' in content
+    assert '<link rel="stylesheet" type="text/css" href="_static/extra.css" />' in content

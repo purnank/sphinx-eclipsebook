@@ -47,7 +47,7 @@ class HTML5Translator(SphinxTranslator, BaseTranslator):
     Our custom HTML translator.
     """
 
-    builder: "StandaloneHTMLBuilder" = None
+    builder: "StandaloneHTMLBuilder"
     # Override docutils.writers.html5_polyglot:HTMLTranslator
     # otherwise, nodes like <inline classes="s">...</inline> will be
     # converted to <s>...</s> by `visit_inline`.
@@ -260,7 +260,7 @@ class HTML5Translator(SphinxTranslator, BaseTranslator):
     def depart_seealso(self, node: Element) -> None:
         self.depart_admonition(node)
 
-    def get_secnumber(self, node: Element) -> Tuple[int, ...]:
+    def get_secnumber(self, node: Element) -> Optional[Tuple[int, ...]]:
         if node.get('secnumber'):
             return node['secnumber']
 
@@ -567,7 +567,7 @@ class HTML5Translator(SphinxTranslator, BaseTranslator):
         # rewrite the URI if the environment knows about it
         if olduri in self.builder.images:
             node['uri'] = posixpath.join(self.builder.imgpath,
-                                         self.builder.images[olduri])
+                                         urllib.parse.quote(self.builder.images[olduri]))
 
         if 'scale' in node:
             # Try to figure out image height and width.  Docutils does that too,
@@ -837,13 +837,13 @@ class HTML5Translator(SphinxTranslator, BaseTranslator):
             node['ids'].remove(id)
 
     @property
-    def _fieldlist_row_index(self):
+    def _fieldlist_row_index(self) -> int:
         warnings.warn('_fieldlist_row_index is deprecated',
                       RemovedInSphinx60Warning, stacklevel=2)
         return self._fieldlist_row_indices[-1]
 
     @property
-    def _table_row_index(self):
+    def _table_row_index(self) -> int:
         warnings.warn('_table_row_index is deprecated',
                       RemovedInSphinx60Warning, stacklevel=2)
         return self._table_row_indices[-1]

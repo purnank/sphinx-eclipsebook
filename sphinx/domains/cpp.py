@@ -2,7 +2,7 @@
 
 import re
 from typing import (Any, Callable, Dict, Generator, Iterator, List, Optional, Tuple, TypeVar,
-                    Union, cast)
+                    Union)
 
 from docutils import nodes
 from docutils.nodes import Element, Node, TextElement, system_message
@@ -754,15 +754,15 @@ class ASTNestedName(ASTBase):
         # just print the name part, with template args, not template params
         if mode == 'noneIsName':
             if self.rooted:
-                assert False, "Can this happen?"  # TODO
+                raise AssertionError("Can this happen?")  # TODO
                 signode += nodes.Text('::')
             for i in range(len(self.names)):
                 if i != 0:
-                    assert False, "Can this happen?"  # TODO
+                    raise AssertionError("Can this happen?")  # TODO
                     signode += nodes.Text('::blah')
                 n = self.names[i]
                 if self.templates[i]:
-                    assert False, "Can this happen?"  # TODO
+                    raise AssertionError("Can this happen?")  # TODO
                     signode += nodes.Text("template")
                     signode += nodes.Text(" ")
                 n.describe_signature(signode, mode, env, '', symbol)
@@ -1386,7 +1386,7 @@ class ASTNewExpr(ASTExpression):
         if self.isNewTypeId:
             res.append(transform(self.typ))
         else:
-            assert False
+            raise AssertionError()
         if self.initList is not None:
             res.append(transform(self.initList))
         return ''.join(res)
@@ -1413,7 +1413,7 @@ class ASTNewExpr(ASTExpression):
         if self.isNewTypeId:
             self.typ.describe_signature(signode, mode, env, symbol)
         else:
-            assert False
+            raise AssertionError()
         if self.initList is not None:
             self.initList.describe_signature(signode, mode, env, symbol)
 
@@ -1990,7 +1990,7 @@ class ASTTrailingTypeSpecName(ASTTrailingTypeSpec):
                 signode += addnodes.desc_sig_keyword('auto', 'auto')
                 signode += addnodes.desc_sig_punctuation(')', ')')
             else:
-                assert False, self.placeholderType
+                raise AssertionError(self.placeholderType)
 
 
 class ASTFunctionParameter(ASTBase):
@@ -2605,6 +2605,10 @@ class ASTDeclaratorPtr(ASTDeclarator):
         self.next.name = name
 
     @property
+    def isPack(self) -> bool:
+        return self.next.isPack
+
+    @property
     def function_params(self) -> List[ASTFunctionParameter]:
         return self.next.function_params
 
@@ -2707,7 +2711,7 @@ class ASTDeclaratorRef(ASTDeclarator):
 
     @property
     def isPack(self) -> bool:
-        return True
+        return self.next.isPack
 
     @property
     def function_params(self) -> List[ASTFunctionParameter]:
@@ -2779,6 +2783,10 @@ class ASTDeclaratorParamPack(ASTDeclarator):
     def trailingReturn(self) -> "ASTType":
         return self.next.trailingReturn
 
+    @property
+    def isPack(self) -> bool:
+        return True
+
     def require_space_after_declSpecs(self) -> bool:
         return False
 
@@ -2834,6 +2842,10 @@ class ASTDeclaratorMemPtr(ASTDeclarator):
     @name.setter
     def name(self, name: ASTNestedName) -> None:
         self.next.name = name
+
+    @property
+    def isPack(self):
+        return self.next.isPack
 
     @property
     def function_params(self) -> List[ASTFunctionParameter]:
@@ -2931,6 +2943,10 @@ class ASTDeclaratorParen(ASTDeclarator):
     @name.setter
     def name(self, name: ASTNestedName) -> None:
         self.inner.name = name
+
+    @property
+    def isPack(self):
+        return self.inner.isPack or self.next.isPack
 
     @property
     def function_params(self) -> List[ASTFunctionParameter]:
@@ -3095,8 +3111,7 @@ class ASTType(ASTBase):
                 elif objectType == 'type':  # just the name
                     res.append(symbol.get_full_nested_name().get_id(version))
                 else:
-                    print(objectType)
-                    assert False
+                    raise AssertionError(objectType)
             else:  # only type encoding
                 if self.decl.is_function_type():
                     raise NoOldIdError()
@@ -3125,8 +3140,7 @@ class ASTType(ASTBase):
             elif objectType == 'type':  # just the name
                 res.append(symbol.get_full_nested_name().get_id(version))
             else:
-                print(objectType)
-                assert False
+                raise AssertionError(objectType)
         else:  # only type encoding
             # the 'returnType' of a non-function type is simply just the last
             # type, i.e., for 'int*' it is 'int'
@@ -3512,6 +3526,14 @@ class ASTTemplateParam(ASTBase):
                            env: "BuildEnvironment", symbol: "Symbol") -> None:
         raise NotImplementedError(repr(self))
 
+    @property
+    def isPack(self) -> bool:
+        raise NotImplementedError(repr(self))
+
+    @property
+    def name(self) -> ASTNestedName:
+        raise NotImplementedError(repr(self))
+
 
 class ASTTemplateKeyParamPackIdDefault(ASTTemplateParam):
     def __init__(self, key: str, identifier: ASTIdentifier,
@@ -3624,7 +3646,9 @@ class ASTTemplateParamTemplateType(ASTTemplateParam):
     def get_identifier(self) -> ASTIdentifier:
         return self.data.get_identifier()
 
-    def get_id(self, version: int, objectType: str = None, symbol: "Symbol" = None) -> str:
+    def get_id(
+        self, version: int, objectType: Optional[str] = None, symbol: Optional["Symbol"] = None
+    ) -> str:
         assert version >= 2
         # this is not part of the normal name mangling in C++
         if symbol:
@@ -3646,9 +3670,11 @@ class ASTTemplateParamTemplateType(ASTTemplateParam):
 class ASTTemplateParamNonType(ASTTemplateParam):
     def __init__(self,
                  param: Union[ASTTypeWithInit,
-                              ASTTemplateParamConstrainedTypeWithInit]) -> None:
+                              ASTTemplateParamConstrainedTypeWithInit],
+                 parameterPack: bool = False) -> None:
         assert param
         self.param = param
+        self.parameterPack = parameterPack
 
     @property
     def name(self) -> ASTNestedName:
@@ -3657,7 +3683,7 @@ class ASTTemplateParamNonType(ASTTemplateParam):
 
     @property
     def isPack(self) -> bool:
-        return self.param.isPack
+        return self.param.isPack or self.parameterPack
 
     def get_identifier(self) -> ASTIdentifier:
         name = self.param.name
@@ -3678,28 +3704,42 @@ class ASTTemplateParamNonType(ASTTemplateParam):
             # the anchor will be our parent
             return symbol.parent.declaration.get_id(version, prefixed=None)
         else:
-            return '_' + self.param.get_id(version)
+            res = '_'
+            if self.parameterPack:
+                res += 'Dp'
+            return res + self.param.get_id(version)
 
     def _stringify(self, transform: StringifyTransform) -> str:
-        return transform(self.param)
+        res = transform(self.param)
+        if self.parameterPack:
+            res += '...'
+        return res
 
     def describe_signature(self, signode: TextElement, mode: str,
                            env: "BuildEnvironment", symbol: "Symbol") -> None:
         self.param.describe_signature(signode, mode, env, symbol)
+        if self.parameterPack:
+            signode += addnodes.desc_sig_punctuation('...', '...')
 
 
 class ASTTemplateParams(ASTBase):
-    def __init__(self, params: List[ASTTemplateParam]) -> None:
+    def __init__(self, params: List[ASTTemplateParam],
+                 requiresClause: Optional["ASTRequiresClause"]) -> None:
         assert params is not None
         self.params = params
+        self.requiresClause = requiresClause
 
-    def get_id(self, version: int) -> str:
+    def get_id(self, version: int, excludeRequires: bool = False) -> str:
         assert version >= 2
         res = []
         res.append("I")
         for param in self.params:
             res.append(param.get_id(version))
         res.append("E")
+        if not excludeRequires and self.requiresClause:
+            res.append('IQ')
+            res.append(self.requiresClause.expr.get_id(version))
+            res.append('E')
         return ''.join(res)
 
     def _stringify(self, transform: StringifyTransform) -> str:
@@ -3707,6 +3747,9 @@ class ASTTemplateParams(ASTBase):
         res.append("template<")
         res.append(", ".join(transform(a) for a in self.params))
         res.append("> ")
+        if self.requiresClause is not None:
+            res.append(transform(self.requiresClause))
+            res.append(" ")
         return ''.join(res)
 
     def describe_signature(self, signode: TextElement, mode: str,
@@ -3721,6 +3764,9 @@ class ASTTemplateParams(ASTBase):
             first = False
             param.describe_signature(signode, mode, env, symbol)
         signode += addnodes.desc_sig_punctuation('>', '>')
+        if self.requiresClause is not None:
+            signode += addnodes.desc_sig_space()
+            self.requiresClause.describe_signature(signode, mode, env, symbol)
 
     def describe_signature_as_introducer(
             self, parentNode: desc_signature, mode: str, env: "BuildEnvironment",
@@ -3745,6 +3791,11 @@ class ASTTemplateParams(ASTBase):
         if lineSpec and not first:
             lineNode = makeLine(parentNode)
         lineNode += addnodes.desc_sig_punctuation('>', '>')
+        if self.requiresClause:
+            reqNode = addnodes.desc_signature_line()
+            reqNode.sphinx_line_type = 'requiresClause'
+            parentNode += reqNode
+            self.requiresClause.describe_signature(reqNode, 'markType', env, symbol)
 
 
 # Template introducers
@@ -3863,12 +3914,24 @@ class ASTTemplateDeclarationPrefix(ASTBase):
         # templates is None means it's an explicit instantiation of a variable
         self.templates = templates
 
-    def get_id(self, version: int) -> str:
+    def get_requires_clause_in_last(self) -> Optional["ASTRequiresClause"]:
+        if self.templates is None:
+            return None
+        lastList = self.templates[-1]
+        if not isinstance(lastList, ASTTemplateParams):
+            return None
+        return lastList.requiresClause  # which may be None
+
+    def get_id_except_requires_clause_in_last(self, version: int) -> str:
         assert version >= 2
-        # this is not part of a normal name mangling system
+        # This is not part of the Itanium ABI mangling system.
         res = []
-        for t in self.templates:
-            res.append(t.get_id(version))
+        lastIndex = len(self.templates) - 1
+        for i, t in enumerate(self.templates):
+            if isinstance(t, ASTTemplateParams):
+                res.append(t.get_id(version, excludeRequires=(i == lastIndex)))
+            else:
+                res.append(t.get_id(version))
         return ''.join(res)
 
     def _stringify(self, transform: StringifyTransform) -> str:
@@ -3891,7 +3954,7 @@ class ASTRequiresClause(ASTBase):
     def _stringify(self, transform: StringifyTransform) -> str:
         return 'requires ' + transform(self.expr)
 
-    def describe_signature(self, signode: addnodes.desc_signature_line, mode: str,
+    def describe_signature(self, signode: nodes.TextElement, mode: str,
                            env: "BuildEnvironment", symbol: "Symbol") -> None:
         signode += addnodes.desc_sig_keyword('requires', 'requires')
         signode += addnodes.desc_sig_space()
@@ -3902,16 +3965,16 @@ class ASTRequiresClause(ASTBase):
 ################################################################################
 
 class ASTDeclaration(ASTBase):
-    def __init__(self, objectType: str, directiveType: str, visibility: str,
-                 templatePrefix: ASTTemplateDeclarationPrefix,
-                 requiresClause: ASTRequiresClause, declaration: Any,
-                 trailingRequiresClause: ASTRequiresClause,
+    def __init__(self, objectType: str, directiveType: Optional[str] = None,
+                 visibility: Optional[str] = None,
+                 templatePrefix: Optional[ASTTemplateDeclarationPrefix] = None,
+                 declaration: Any = None,
+                 trailingRequiresClause: Optional[ASTRequiresClause] = None,
                  semicolon: bool = False) -> None:
         self.objectType = objectType
         self.directiveType = directiveType
         self.visibility = visibility
         self.templatePrefix = templatePrefix
-        self.requiresClause = requiresClause
         self.declaration = declaration
         self.trailingRequiresClause = trailingRequiresClause
         self.semicolon = semicolon
@@ -3922,11 +3985,10 @@ class ASTDeclaration(ASTBase):
 
     def clone(self) -> "ASTDeclaration":
         templatePrefixClone = self.templatePrefix.clone() if self.templatePrefix else None
-        requiresClasueClone = self.requiresClause.clone() if self.requiresClause else None
         trailingRequiresClasueClone = self.trailingRequiresClause.clone() \
             if self.trailingRequiresClause else None
         return ASTDeclaration(self.objectType, self.directiveType, self.visibility,
-                              templatePrefixClone, requiresClasueClone,
+                              templatePrefixClone,
                               self.declaration.clone(), trailingRequiresClasueClone,
                               self.semicolon)
 
@@ -3942,7 +4004,7 @@ class ASTDeclaration(ASTBase):
 
     def get_id(self, version: int, prefixed: bool = True) -> str:
         if version == 1:
-            if self.templatePrefix:
+            if self.templatePrefix or self.trailingRequiresClause:
                 raise NoOldIdError()
             if self.objectType == 'enumerator' and self.enumeratorScopedSymbol:
                 return self.enumeratorScopedSymbol.declaration.get_id(version)
@@ -3954,16 +4016,31 @@ class ASTDeclaration(ASTBase):
             res = [_id_prefix[version]]
         else:
             res = []
-        if self.templatePrefix:
-            res.append(self.templatePrefix.get_id(version))
-        if self.requiresClause or self.trailingRequiresClause:
+        # (See also https://github.com/sphinx-doc/sphinx/pull/10286#issuecomment-1168102147)
+        # The first implementation of requires clauses only supported a single clause after the
+        # template prefix, and no trailing clause. It put the ID after the template parameter
+        # list, i.e.,
+        #    "I" + template_parameter_list_id + "E" + "IQ" + requires_clause_id + "E"
+        # but the second implementation associates the requires clause with each list, i.e.,
+        #    "I" + template_parameter_list_id + "IQ" + requires_clause_id + "E" + "E"
+        # To avoid making a new ID version, we make an exception for the last requires clause
+        # in the template prefix, and still put it in the end.
+        # As we now support trailing requires clauses we add that as if it was a conjunction.
+        if self.templatePrefix is not None:
+            res.append(self.templatePrefix.get_id_except_requires_clause_in_last(version))
+            requiresClauseInLast = self.templatePrefix.get_requires_clause_in_last()
+        else:
+            requiresClauseInLast = None
+
+        if requiresClauseInLast or self.trailingRequiresClause:
             if version < 4:
                 raise NoOldIdError()
             res.append('IQ')
-            if self.requiresClause and self.trailingRequiresClause:
+            if requiresClauseInLast and self.trailingRequiresClause:
+                # make a conjunction of them
                 res.append('aa')
-            if self.requiresClause:
-                res.append(self.requiresClause.expr.get_id(version))
+            if requiresClauseInLast:
+                res.append(requiresClauseInLast.expr.get_id(version))
             if self.trailingRequiresClause:
                 res.append(self.trailingRequiresClause.expr.get_id(version))
             res.append('E')
@@ -3980,9 +4057,6 @@ class ASTDeclaration(ASTBase):
             res.append(' ')
         if self.templatePrefix:
             res.append(transform(self.templatePrefix))
-        if self.requiresClause:
-            res.append(transform(self.requiresClause))
-            res.append(' ')
         res.append(transform(self.declaration))
         if self.trailingRequiresClause:
             res.append(' ')
@@ -4007,11 +4081,6 @@ class ASTDeclaration(ASTBase):
             self.templatePrefix.describe_signature(signode, mode, env,
                                                    symbol=self.symbol,
                                                    lineSpec=options.get('tparam-line-spec'))
-        if self.requiresClause:
-            reqNode = addnodes.desc_signature_line()
-            reqNode.sphinx_line_type = 'requiresClause'
-            signode.append(reqNode)
-            self.requiresClause.describe_signature(reqNode, 'markType', env, self.symbol)
         signode += mainDeclNode
         if self.visibility and self.visibility != "public":
             mainDeclNode += addnodes.desc_sig_keyword(self.visibility, self.visibility)
@@ -4049,7 +4118,7 @@ class ASTDeclaration(ASTBase):
             mainDeclNode += addnodes.desc_sig_keyword('enumerator', 'enumerator')
             mainDeclNode += addnodes.desc_sig_space()
         else:
-            assert False, self.objectType
+            raise AssertionError(self.objectType)
         self.declaration.describe_signature(mainDeclNode, mode, env, self.symbol)
         lastDeclNode = mainDeclNode
         if self.trailingRequiresClause:
@@ -4096,6 +4165,31 @@ class LookupKey:
         self.data = data
 
 
+def _is_specialization(templateParams: Union[ASTTemplateParams, ASTTemplateIntroduction],
+                       templateArgs: ASTTemplateArgs) -> bool:
+    # Checks if `templateArgs` does not exactly match `templateParams`.
+    # the names of the template parameters must be given exactly as args
+    # and params that are packs must in the args be the name expanded
+    if len(templateParams.params) != len(templateArgs.args):
+        return True
+    # having no template params and no arguments is also a specialization
+    if len(templateParams.params) == 0:
+        return True
+    for i in range(len(templateParams.params)):
+        param = templateParams.params[i]
+        arg = templateArgs.args[i]
+        # TODO: doing this by string manipulation is probably not the most efficient
+        paramName = str(param.name)
+        argTxt = str(arg)
+        isArgPackExpansion = argTxt.endswith('...')
+        if param.isPack != isArgPackExpansion:
+            return True
+        argName = argTxt[:-3] if isArgPackExpansion else argTxt
+        if paramName != argName:
+            return True
+    return False
+
+
 class Symbol:
     debug_indent = 0
     debug_indent_string = "  "
@@ -4103,11 +4197,11 @@ class Symbol:
     debug_show_tree = False  # overridden by the corresponding config value
 
     def __copy__(self):
-        assert False  # shouldn't happen
+        raise AssertionError()  # shouldn't happen
 
     def __deepcopy__(self, memo):
         if self.parent:
-            assert False  # shouldn't happen
+            raise AssertionError()  # shouldn't happen
         else:
             # the domain base class makes a copy of the initial data, which is fine
             return Symbol(None, None, None, None, None, None, None)
@@ -4131,19 +4225,30 @@ class Symbol:
 
     def __setattr__(self, key: str, value: Any) -> None:
         if key == "children":
-            assert False
+            raise AssertionError()
         else:
             return super().__setattr__(key, value)
 
-    def __init__(self, parent: "Symbol", identOrOp: Union[ASTIdentifier, ASTOperator],
-                 templateParams: Union[ASTTemplateParams, ASTTemplateIntroduction],
-                 templateArgs: Any, declaration: ASTDeclaration,
-                 docname: str, line: int) -> None:
+    def __init__(self, parent: Optional["Symbol"],
+                 identOrOp: Union[ASTIdentifier, ASTOperator, None],
+                 templateParams: Union[ASTTemplateParams, ASTTemplateIntroduction, None],
+                 templateArgs: Any, declaration: Optional[ASTDeclaration],
+                 docname: Optional[str], line: Optional[int]) -> None:
         self.parent = parent
         # declarations in a single directive are linked together
-        self.siblingAbove: Symbol = None
-        self.siblingBelow: Symbol = None
+        self.siblingAbove: Optional[Symbol] = None
+        self.siblingBelow: Optional[Symbol] = None
         self.identOrOp = identOrOp
+        # Ensure the same symbol for `A` is created for:
+        #
+        #     .. cpp:class:: template <typename T> class A
+        #
+        # and
+        #
+        #     .. cpp:function:: template <typename T> int A<T>::foo()
+        if (templateArgs is not None and
+                not _is_specialization(templateParams, templateArgs)):
+            templateArgs = None
         self.templateParams = templateParams  # template<templateParams>
         self.templateArgs = templateArgs  # identifier<templateArgs>
         self.declaration = declaration
@@ -4194,7 +4299,7 @@ class Symbol:
                     continue
                 # only add a declaration if we our self are from a declaration
                 if self.declaration:
-                    decl = ASTDeclaration('templateParam', None, None, None, None, tp, None)
+                    decl = ASTDeclaration(objectType='templateParam', declaration=tp)
                 else:
                     decl = None
                 nne = ASTNestedNameElement(tp.get_identifier(), None)
@@ -4209,7 +4314,7 @@ class Symbol:
                 if nn is None:
                     continue
                 # (comparing to the template params: we have checked that we are a declaration)
-                decl = ASTDeclaration('functionParam', None, None, None, None, fp, None)
+                decl = ASTDeclaration(objectType='functionParam', declaration=fp)
                 assert not nn.rooted
                 assert len(nn.names) == 1
                 self._add_symbols(nn, [], decl, self.docname, self.line)
@@ -4324,33 +4429,12 @@ class Symbol:
             Symbol.debug_print("correctPrimaryTemplateAargs:", correctPrimaryTemplateArgs)
             Symbol.debug_print("searchInSiblings:           ", searchInSiblings)
 
-        def isSpecialization() -> bool:
-            # the names of the template parameters must be given exactly as args
-            # and params that are packs must in the args be the name expanded
-            if len(templateParams.params) != len(templateArgs.args):
-                return True
-            # having no template params and no arguments is also a specialization
-            if len(templateParams.params) == 0:
-                return True
-            for i in range(len(templateParams.params)):
-                param = templateParams.params[i]
-                arg = templateArgs.args[i]
-                # TODO: doing this by string manipulation is probably not the most efficient
-                paramName = str(param.name)
-                argTxt = str(arg)
-                isArgPackExpansion = argTxt.endswith('...')
-                if param.isPack != isArgPackExpansion:
-                    return True
-                argName = argTxt[:-3] if isArgPackExpansion else argTxt
-                if paramName != argName:
-                    return True
-            return False
         if correctPrimaryTemplateArgs:
             if templateParams is not None and templateArgs is not None:
                 # If both are given, but it's not a specialization, then do lookup as if
                 # there is no argument list.
                 # For example: template<typename T> int A<T>::var;
-                if not isSpecialization():
+                if not _is_specialization(templateParams, templateArgs):
                     templateArgs = None
 
         def matches(s: "Symbol") -> bool:
@@ -4779,7 +4863,7 @@ class Symbol:
                     if symbol.declaration is None:
                         if Symbol.debug_lookup:
                             Symbol.debug_print("empty candidate")
-                        # if in the end we have non matching, but have an empty one,
+                        # if in the end we have non-matching, but have an empty one,
                         # then just continue with that
                         ourChild = symbol
                         continue
@@ -4806,14 +4890,23 @@ class Symbol:
                                  ourChild.declaration.directiveType, name)
                     logger.warning(msg, location=(otherChild.docname, otherChild.line))
                 else:
-                    # Both have declarations, and in the same docname.
-                    # This can apparently happen, it should be safe to
-                    # just ignore it, right?
-                    # Hmm, only on duplicate declarations, right?
-                    msg = "Internal C++ domain error during symbol merging.\n"
-                    msg += "ourChild:\n" + ourChild.to_string(1)
-                    msg += "\notherChild:\n" + otherChild.to_string(1)
-                    logger.warning(msg, location=otherChild.docname)
+                    if (otherChild.declaration.objectType ==
+                            ourChild.declaration.objectType and
+                            otherChild.declaration.objectType in
+                            ('templateParam', 'functionParam') and
+                            ourChild.parent.declaration == otherChild.parent.declaration):
+                        # `ourChild` was just created during merging by the call
+                        # to `_fill_empty` on the parent and can be ignored.
+                        pass
+                    else:
+                        # Both have declarations, and in the same docname.
+                        # This can apparently happen, it should be safe to
+                        # just ignore it, right?
+                        # Hmm, only on duplicate declarations, right?
+                        msg = "Internal C++ domain error during symbol merging.\n"
+                        msg += "ourChild:\n" + ourChild.to_string(1)
+                        msg += "\notherChild:\n" + otherChild.to_string(1)
+                        logger.warning(msg, location=otherChild.docname)
             ourChild.merge_with(otherChild, docnames, env)
         if Symbol.debug_lookup:
             Symbol.debug_indent -= 2
@@ -5073,6 +5166,7 @@ class Symbol:
                 res.append(": ")
                 if self.isRedeclaration:
                     res.append('!!duplicate!! ')
+                res.append("{" + self.declaration.objectType + "} ")
                 res.append(str(self.declaration))
         if self.docname:
             res.append('\t(')
@@ -5754,7 +5848,7 @@ class DefinitionParser(BaseParser):
             while not self.eof:
                 if (len(symbols) == 0 and self.current_char in end):
                     break
-                if self.current_char in brackets.keys():
+                if self.current_char in brackets:
                     symbols.append(brackets[self.current_char])
                 elif len(symbols) > 0 and self.current_char == symbols[-1]:
                     symbols.pop()
@@ -5991,7 +6085,7 @@ class DefinitionParser(BaseParser):
             if modifier is not None:
                 self.fail("Can not have {} without a floating point type.".format(modifier))
         else:
-            assert False, "Unhandled type {}".format(typ)
+            raise AssertionError("Unhandled type {}".format(typ))
 
         canonNames: List[str] = []
         if modifier is not None:
@@ -6506,14 +6600,21 @@ class DefinitionParser(BaseParser):
                 declSpecs = self._parse_decl_specs(outer=outer, typed=False)
                 decl = self._parse_declarator(named=True, paramMode=outer,
                                               typed=False)
-                self.assert_end(allowSemicolon=True)
+                mustEnd = True
+                if outer == 'function':
+                    # Allow trailing requires on functions.
+                    self.skip_ws()
+                    if re.compile(r'requires\b').match(self.definition, self.pos):
+                        mustEnd = False
+                if mustEnd:
+                    self.assert_end(allowSemicolon=True)
             except DefinitionError as exUntyped:
                 if outer == 'type':
                     desc = "If just a name"
                 elif outer == 'function':
                     desc = "If the function has no return type"
                 else:
-                    assert False
+                    raise AssertionError()
                 prevErrors.append((exUntyped, desc))
                 self.pos = startPos
                 try:
@@ -6526,7 +6627,7 @@ class DefinitionParser(BaseParser):
                     elif outer == 'function':
                         desc = "If the function has a return type"
                     else:
-                        assert False
+                        raise AssertionError()
                     prevErrors.append((exTyped, desc))
                     # Retain the else branch for easier debugging.
                     # TODO: it would be nice to save the previous stacktrace
@@ -6538,7 +6639,7 @@ class DefinitionParser(BaseParser):
                         elif outer == 'function':
                             header = "Error when parsing function declaration."
                         else:
-                            assert False
+                            raise AssertionError()
                         raise self._make_multi_error(prevErrors, header) from exTyped
                     else:
                         # For testing purposes.
@@ -6687,7 +6788,7 @@ class DefinitionParser(BaseParser):
     def _parse_template_parameter(self) -> ASTTemplateParam:
         self.skip_ws()
         if self.skip_word('template'):
-            # declare a tenplate template parameter
+            # declare a template template parameter
             nestedParams = self._parse_template_parameter_list()
         else:
             nestedParams = None
@@ -6734,7 +6835,9 @@ class DefinitionParser(BaseParser):
                 # non-type parameter or constrained type parameter
                 self.pos = pos
                 param = self._parse_type_with_init('maybe', 'templateParam')
-                return ASTTemplateParamNonType(param)
+                self.skip_ws()
+                parameterPack = self.skip_string('...')
+                return ASTTemplateParamNonType(param, parameterPack)
             except DefinitionError as eNonType:
                 self.pos = pos
                 header = "Error when parsing template parameter."
@@ -6763,7 +6866,8 @@ class DefinitionParser(BaseParser):
                 err = eParam
             self.skip_ws()
             if self.skip_string('>'):
-                return ASTTemplateParams(templateParams)
+                requiresClause = self._parse_requires_clause()
+                return ASTTemplateParams(templateParams, requiresClause)
             elif self.skip_string(','):
                 continue
             else:
@@ -6885,6 +6989,8 @@ class DefinitionParser(BaseParser):
                         return ASTTemplateDeclarationPrefix(None)
                     else:
                         raise e
+                if objectType == 'concept' and params.requiresClause is not None:
+                    self.fail('requires-clause not allowed for concept')
             else:
                 params = self._parse_template_introduction()
                 if not params:
@@ -6933,7 +7039,7 @@ class DefinitionParser(BaseParser):
 
             newTemplates: List[Union[ASTTemplateParams, ASTTemplateIntroduction]] = []
             for _i in range(numExtra):
-                newTemplates.append(ASTTemplateParams([]))
+                newTemplates.append(ASTTemplateParams([], requiresClause=None))
             if templatePrefix and not isMemberInstantiation:
                 newTemplates.extend(templatePrefix.templates)
             templatePrefix = ASTTemplateDeclarationPrefix(newTemplates)
@@ -6949,7 +7055,6 @@ class DefinitionParser(BaseParser):
             raise Exception('Internal error, unknown directiveType "%s".' % directiveType)
         visibility = None
         templatePrefix = None
-        requiresClause = None
         trailingRequiresClause = None
         declaration: Any = None
 
@@ -6957,10 +7062,8 @@ class DefinitionParser(BaseParser):
         if self.match(_visibility_re):
             visibility = self.matched_text
 
-        if objectType in ('type', 'concept', 'member', 'function', 'class'):
+        if objectType in ('type', 'concept', 'member', 'function', 'class', 'union'):
             templatePrefix = self._parse_template_declaration_prefix(objectType)
-            if objectType == 'function' and templatePrefix is not None:
-                requiresClause = self._parse_requires_clause()
 
         if objectType == 'type':
             prevErrors = []
@@ -6986,8 +7089,7 @@ class DefinitionParser(BaseParser):
             declaration = self._parse_type_with_init(named=True, outer='member')
         elif objectType == 'function':
             declaration = self._parse_type(named=True, outer='function')
-            if templatePrefix is not None:
-                trailingRequiresClause = self._parse_requires_clause()
+            trailingRequiresClause = self._parse_requires_clause()
         elif objectType == 'class':
             declaration = self._parse_class()
         elif objectType == 'union':
@@ -6997,7 +7099,7 @@ class DefinitionParser(BaseParser):
         elif objectType == 'enumerator':
             declaration = self._parse_enumerator()
         else:
-            assert False
+            raise AssertionError()
         templatePrefix = self._check_template_consistency(declaration.name,
                                                           templatePrefix,
                                                           fullSpecShorthand=False,
@@ -7005,7 +7107,7 @@ class DefinitionParser(BaseParser):
         self.skip_ws()
         semicolon = self.skip_string(';')
         return ASTDeclaration(objectType, directiveType, visibility,
-                              templatePrefix, requiresClause, declaration,
+                              templatePrefix, declaration,
                               trailingRequiresClause, semicolon)
 
     def parse_namespace_object(self) -> ASTNamespace:
@@ -7085,6 +7187,7 @@ class CPPObject(ObjectDescription[ASTDeclaration]):
 
     option_spec: OptionSpec = {
         'noindexentry': directives.flag,
+        'nocontentsentry': directives.flag,
         'tparam-line-spec': directives.flag,
     }
 
@@ -7519,7 +7622,6 @@ class AliasTransform(SphinxTransform):
 
     def apply(self, **kwargs: Any) -> None:
         for node in self.document.findall(AliasNode):
-            node = cast(AliasNode, node)
             sig = node.sig
             parentKey = node.parentKey
             try:
@@ -7925,7 +8027,7 @@ class CPPDomain(Domain):
             if objtypes:
                 return declTyp in objtypes
             print("Type is %s, declaration type is %s" % (typ, declTyp))
-            assert False
+            raise AssertionError()
         if not checkType():
             logger.warning("cpp:%s targets a %s (%s).",
                            typ, s.declaration.objectType,
@@ -8051,7 +8153,7 @@ def setup(app: Sphinx) -> Dict[str, Any]:
 
     return {
         'version': 'builtin',
-        'env_version': 6,
+        'env_version': 8,
         'parallel_read_safe': True,
         'parallel_write_safe': True,
     }

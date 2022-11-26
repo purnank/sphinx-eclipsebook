@@ -4,6 +4,7 @@ import json
 import re
 import socket
 import time
+from copy import deepcopy
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from html.parser import HTMLParser
@@ -117,11 +118,11 @@ class CheckExternalLinksBuilder(DummyBuilder):
         socket.setdefaulttimeout(5.0)
 
     def process_result(self, result: CheckResult) -> None:
-        filename = self.env.doc2path(result.docname, None)
+        filename = self.env.doc2path(result.docname, False)
 
-        linkstat = dict(filename=filename, lineno=result.lineno,
-                        status=result.status, code=result.code, uri=result.uri,
-                        info=result.message)
+        linkstat = {"filename": filename, "lineno": result.lineno,
+                    "status": result.status, "code": result.code, "uri": result.uri,
+                    "info": result.message}
         self.write_linkstat(linkstat)
 
         if result.status == 'unchecked':
@@ -200,9 +201,9 @@ class HyperlinkAvailabilityChecker:
         self.config = config
         self.env = env
         self.rate_limits: Dict[str, RateLimit] = {}
-        self.rqueue: Queue = Queue()
+        self.rqueue: Queue[CheckResult] = Queue()
         self.workers: List[Thread] = []
-        self.wqueue: PriorityQueue = PriorityQueue()
+        self.wqueue: PriorityQueue[CheckRequest] = PriorityQueue()
 
         self.to_ignore = [re.compile(x) for x in self.config.linkcheck_ignore]
 
@@ -245,8 +246,8 @@ class HyperlinkAvailabilityChecker:
 class HyperlinkAvailabilityCheckWorker(Thread):
     """A worker class for checking the availability of hyperlinks."""
 
-    def __init__(self, env: BuildEnvironment, config: Config, rqueue: Queue,
-                 wqueue: Queue, rate_limits: Dict[str, RateLimit]) -> None:
+    def __init__(self, env: BuildEnvironment, config: Config, rqueue: 'Queue[CheckResult]',
+                 wqueue: 'Queue[CheckRequest]', rate_limits: Dict[str, RateLimit]) -> None:
         self.config = config
         self.env = env
         self.rate_limits = rate_limits
@@ -267,7 +268,7 @@ class HyperlinkAvailabilityCheckWorker(Thread):
         if self.config.linkcheck_timeout:
             kwargs['timeout'] = self.config.linkcheck_timeout
 
-        def get_request_headers() -> Dict:
+        def get_request_headers() -> Dict[str, str]:
             url = urlparse(uri)
             candidates = ["%s://%s" % (url.scheme, url.netloc),
                           "%s://%s/" % (url.scheme, url.netloc),
@@ -276,7 +277,7 @@ class HyperlinkAvailabilityCheckWorker(Thread):
 
             for u in candidates:
                 if u in self.config.linkcheck_request_headers:
-                    headers = dict(DEFAULT_REQUEST_HEADERS)
+                    headers = deepcopy(DEFAULT_REQUEST_HEADERS)
                     headers.update(self.config.linkcheck_request_headers[u])
                     return headers
 
@@ -301,7 +302,7 @@ class HyperlinkAvailabilityCheckWorker(Thread):
                 req_url = encode_uri(req_url)
 
             # Get auth info, if any
-            for pattern, auth_info in self.auth:
+            for pattern, auth_info in self.auth:  # noqa: B007 (false positive)
                 if pattern.match(uri):
                     break
             else:
@@ -427,7 +428,7 @@ class HyperlinkAvailabilityCheckWorker(Thread):
                 uri, docname, lineno = hyperlink
             except ValueError:
                 # old styled check_request (will be deprecated in Sphinx-5.0)
-                next_check, uri, docname, lineno = check_request
+                next_check, uri, docname, lineno = check_request  # type: ignore[misc]
 
             if uri is None:
                 break
@@ -501,32 +502,34 @@ class HyperlinkCollector(SphinxPostTransform):
         builder = cast(CheckExternalLinksBuilder, self.app.builder)
         hyperlinks = builder.hyperlinks
 
+        def add_uri(uri: str, node: nodes.Element) -> None:
+            newuri = self.app.emit_firstresult('linkcheck-process-uri', uri)
+            if newuri:
+                uri = newuri
+
+            lineno = get_node_line(node)
+            uri_info = Hyperlink(uri, self.env.docname, lineno)
+            if uri not in hyperlinks:
+                hyperlinks[uri] = uri_info
+
         # reference nodes
         for refnode in self.document.findall(nodes.reference):
             if 'refuri' not in refnode:
                 continue
             uri = refnode['refuri']
-            newuri = self.app.emit_firstresult('linkcheck-process-uri', uri)
-            if newuri:
-                uri = newuri
-
-            lineno = get_node_line(refnode)
-            uri_info = Hyperlink(uri, self.env.docname, lineno)
-            if uri not in hyperlinks:
-                hyperlinks[uri] = uri_info
+            add_uri(uri, refnode)
 
         # image nodes
         for imgnode in self.document.findall(nodes.image):
             uri = imgnode['candidates'].get('?')
             if uri and '://' in uri:
-                newuri = self.app.emit_firstresult('linkcheck-process-uri', uri)
-                if newuri:
-                    uri = newuri
+                add_uri(uri, imgnode)
 
-                lineno = get_node_line(imgnode)
-                uri_info = Hyperlink(uri, self.env.docname, lineno)
-                if uri not in hyperlinks:
-                    hyperlinks[uri] = uri_info
+        # raw nodes
+        for rawnode in self.document.findall(nodes.raw):
+            uri = rawnode.get('source')
+            if uri and '://' in uri:
+                add_uri(uri, rawnode)
 
 
 def rewrite_github_anchor(app: Sphinx, uri: str) -> Optional[str]:
@@ -561,19 +564,19 @@ def setup(app: Sphinx) -> Dict[str, Any]:
     app.add_builder(CheckExternalLinksBuilder)
     app.add_post_transform(HyperlinkCollector)
 
-    app.add_config_value('linkcheck_ignore', [], None)
-    app.add_config_value('linkcheck_exclude_documents', [], None)
-    app.add_config_value('linkcheck_allowed_redirects', {}, None)
-    app.add_config_value('linkcheck_auth', [], None)
-    app.add_config_value('linkcheck_request_headers', {}, None)
-    app.add_config_value('linkcheck_retries', 1, None)
-    app.add_config_value('linkcheck_timeout', None, None, [int])
-    app.add_config_value('linkcheck_workers', 5, None)
-    app.add_config_value('linkcheck_anchors', True, None)
+    app.add_config_value('linkcheck_ignore', [], False)
+    app.add_config_value('linkcheck_exclude_documents', [], False)
+    app.add_config_value('linkcheck_allowed_redirects', {}, False)
+    app.add_config_value('linkcheck_auth', [], False)
+    app.add_config_value('linkcheck_request_headers', {}, False)
+    app.add_config_value('linkcheck_retries', 1, False)
+    app.add_config_value('linkcheck_timeout', None, False, [int])
+    app.add_config_value('linkcheck_workers', 5, False)
+    app.add_config_value('linkcheck_anchors', True, False)
     # Anchors starting with ! are ignored since they are
     # commonly used for dynamic pages
-    app.add_config_value('linkcheck_anchors_ignore', ["^!"], None)
-    app.add_config_value('linkcheck_rate_limit_timeout', 300.0, None)
+    app.add_config_value('linkcheck_anchors_ignore', ["^!"], False)
+    app.add_config_value('linkcheck_rate_limit_timeout', 300.0, False)
 
     app.add_event('linkcheck-process-uri')
 

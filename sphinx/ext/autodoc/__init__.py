@@ -34,7 +34,6 @@ from sphinx.util.typing import stringify as stringify_typehint
 if TYPE_CHECKING:
     from sphinx.ext.autodoc.directive import DocumenterBridge
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -105,7 +104,7 @@ def inherited_members_option(arg: Any) -> Set[str]:
     if arg in (None, True):
         return {'object'}
     elif arg:
-        return set(x.strip() for x in arg.split(','))
+        return {x.strip() for x in arg.split(',')}
     else:
         return set()
 
@@ -623,7 +622,7 @@ class Documenter:
                 return False, []  # type: ignore
             # specific members given
             selected = []
-            for name in self.options.members:  # type: str
+            for name in self.options.members:
                 if name in members:
                     selected.append((name, members[name].value))
                 else:
@@ -962,6 +961,7 @@ class ModuleDocumenter(Documenter):
     objtype = 'module'
     content_indent = ''
     titles_allowed = True
+    _extra_indent = '   '
 
     option_spec: OptionSpec = {
         'members': members_option, 'undoc-members': bool_option,
@@ -978,6 +978,15 @@ class ModuleDocumenter(Documenter):
         super().__init__(*args)
         merge_members_option(self.options)
         self.__all__: Optional[Sequence[str]] = None
+
+    def add_content(self, more_content: Optional[StringList]) -> None:
+        old_indent = self.indent
+        self.indent += self._extra_indent
+        super().add_content(None)
+        self.indent = old_indent
+        if more_content:
+            for line, src in zip(more_content.data, more_content.items):
+                self.add_line(line, src[0], src[1])
 
     @classmethod
     def can_document_member(cls, member: Any, membername: str, isattr: bool, parent: Any
@@ -1677,7 +1686,7 @@ class ClassDocumenter(DocstringSignatureMixin, ModuleLevelDocumenter):  # type: 
                 return False, []  # type: ignore
             # specific members given
             selected = []
-            for name in self.options.members:  # type: str
+            for name in self.options.members:
                 if name in members:
                     selected.append(members[name])
                 else:

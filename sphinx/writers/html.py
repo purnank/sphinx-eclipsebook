@@ -67,12 +67,13 @@ class HTMLWriter(Writer):
         self.clean_meta = ''.join(self.visitor.meta[2:])
 
 
+# RemovedInSphinx70Warning
 class HTMLTranslator(SphinxTranslator, BaseTranslator):
     """
     Our custom HTML translator.
     """
 
-    builder: "StandaloneHTMLBuilder" = None
+    builder: "StandaloneHTMLBuilder"
 
     def __init__(self, document: nodes.document, builder: Builder) -> None:
         super().__init__(document, builder)
@@ -282,7 +283,7 @@ class HTMLTranslator(SphinxTranslator, BaseTranslator):
     def depart_seealso(self, node: Element) -> None:
         self.depart_admonition(node)
 
-    def get_secnumber(self, node: Element) -> Tuple[int, ...]:
+    def get_secnumber(self, node: Element) -> Optional[Tuple[int, ...]]:
         if node.get('secnumber'):
             return node['secnumber']
         elif isinstance(node.parent, nodes.section):
@@ -619,7 +620,7 @@ class HTMLTranslator(SphinxTranslator, BaseTranslator):
         # rewrite the URI if the environment knows about it
         if olduri in self.builder.images:
             node['uri'] = posixpath.join(self.builder.imgpath,
-                                         self.builder.images[olduri])
+                                         urllib.parse.quote(self.builder.images[olduri]))
 
         if 'scale' in node:
             # Try to figure out image height and width.  Docutils does that too,

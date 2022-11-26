@@ -10,6 +10,7 @@ import sys
 from inspect import Parameter
 from typing import Any, Dict, List, Optional
 
+import sphinx
 from sphinx.application import Sphinx
 from sphinx.locale import __
 from sphinx.pycode.ast import parse as ast_parse
@@ -27,7 +28,7 @@ class DefaultValue:
         return self.name
 
 
-def get_function_def(obj: Any) -> ast.FunctionDef:
+def get_function_def(obj: Any) -> Optional[ast.FunctionDef]:
     """Get FunctionDef object from living object.
     This tries to parse original code for living object and returns
     AST node for given *obj*.
@@ -121,6 +122,6 @@ def setup(app: Sphinx) -> Dict[str, Any]:
     app.connect('autodoc-before-process-signature', update_defvalue)
 
     return {
-        'version': '1.0',
+        'version': sphinx.__display_version__,
         'parallel_read_safe': True
     }

@@ -5,7 +5,7 @@ import re
 import warnings
 from datetime import datetime, timezone
 from os import path
-from typing import TYPE_CHECKING, Callable, Generator, List, NamedTuple, Tuple, Union
+from typing import TYPE_CHECKING, Callable, Generator, List, NamedTuple, Optional, Tuple, Union
 
 import babel.dates
 from babel.messages.mofile import write_mo
@@ -190,7 +190,9 @@ def babel_format_date(date: datetime, format: str, locale: str,
         return format
 
 
-def format_date(format: str, date: datetime = None, language: str = None) -> str:
+def format_date(
+    format: str, date: Optional[datetime] = None, language: Optional[str] = None
+) -> str:
     if date is None:
         # If time is not specified, try to use $SOURCE_DATE_EPOCH variable
         # See https://wiki.debian.org/ReproducibleBuilds/TimestampsProposal
@@ -231,7 +233,7 @@ def format_date(format: str, date: datetime = None, language: str = None) -> str
 
 def get_image_filename_for_language(filename: str, env: "BuildEnvironment") -> str:
     filename_format = env.config.figure_language_filename
-    d = dict()
+    d = {}
     d['root'], d['ext'] = path.splitext(filename)
     dirname = path.dirname(d['root'])
     if dirname and not dirname.endswith(path.sep):

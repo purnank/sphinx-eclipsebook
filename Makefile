@@ -62,7 +62,7 @@ type-check:
 
 .PHONY: doclinter
 doclinter:
-	python utils/doclinter.py CHANGES *.rst doc/
+	sphinx-lint --enable line-too-long --max-line-length 85 CHANGES *.rst doc/
 
 .PHONY: test
 test:
@@ -74,7 +74,7 @@ covertest:
 
 .PHONY: build
 build:
-	@$(PYTHON) setup.py build
+	@$(PYTHON) -m build .
 
 .PHONY: docs
 docs:

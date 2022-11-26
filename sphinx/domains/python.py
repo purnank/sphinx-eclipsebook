@@ -28,9 +28,10 @@ from sphinx.pycode.ast import parse as ast_parse
 from sphinx.roles import XRefRole
 from sphinx.util import logging
 from sphinx.util.docfields import Field, GroupedField, TypedField
-from sphinx.util.docutils import SphinxDirective
+from sphinx.util.docutils import SphinxDirective, switch_source_input
 from sphinx.util.inspect import signature_from_str
-from sphinx.util.nodes import find_pending_xref_condition, make_id, make_refnode
+from sphinx.util.nodes import (find_pending_xref_condition, make_id, make_refnode,
+                               nested_parse_with_titles)
 from sphinx.util.typing import OptionSpec, TextlikeNode
 
 logger = logging.getLogger(__name__)
@@ -99,8 +100,8 @@ def parse_reftarget(reftarget: str, suppress_prefix: bool = False
     return reftype, reftarget, title, refspecific
 
 
-def type_to_xref(target: str, env: BuildEnvironment = None, suppress_prefix: bool = False
-                 ) -> addnodes.pending_xref:
+def type_to_xref(target: str, env: Optional[BuildEnvironment] = None,
+                 suppress_prefix: bool = False) -> addnodes.pending_xref:
     """Convert a type string to a cross reference node."""
     if env:
         kwargs = {'py:module': env.ref_context.get('py:module'),
@@ -239,7 +240,9 @@ def _parse_annotation(annotation: str, env: BuildEnvironment) -> List[Node]:
         return [type_to_xref(annotation, env)]
 
 
-def _parse_arglist(arglist: str, env: BuildEnvironment = None) -> addnodes.desc_parameterlist:
+def _parse_arglist(
+    arglist: str, env: Optional[BuildEnvironment] = None
+) -> addnodes.desc_parameterlist:
     """Parse a list of arguments using AST parser"""
     params = addnodes.desc_parameterlist(arglist)
     sig = signature_from_str('(%s)' % arglist)
@@ -378,7 +381,7 @@ class PyXrefMixin:
                    innernode: Type[TextlikeNode] = nodes.emphasis,
                    contnode: Node = None, env: BuildEnvironment = None,
                    inliner: Inliner = None, location: Node = None) -> List[Node]:
-        delims = r'(\s*[\[\]\(\),](?:\s*or\s)?\s*|\s+or\s+|\s*\|\s*|\.\.\.)'
+        delims = r'(\s*[\[\]\(\),](?:\s*o[rf]\s)?\s*|\s+o[rf]\s+|\s*\|\s*|\.\.\.)'
         delims_re = re.compile(delims)
         sub_targets = re.split(delims, target)
 
@@ -424,6 +427,7 @@ class PyObject(ObjectDescription[Tuple[str, str]]):
     option_spec: OptionSpec = {
         'noindex': directives.flag,
         'noindexentry': directives.flag,
+        'nocontentsentry': directives.flag,
         'module': directives.unchanged,
         'canonical': directives.unchanged,
         'annotation': directives.unchanged,
@@ -555,6 +559,17 @@ class PyObject(ObjectDescription[Tuple[str, str]]):
 
         return fullname, prefix
 
+    def _object_hierarchy_parts(self, sig_node: desc_signature) -> Tuple[str, ...]:
+        if 'fullname' not in sig_node:
+            return ()
+        modname = sig_node.get('module')
+        fullname = sig_node['fullname']
+
+        if modname:
+            return (modname, *fullname.split('.'))
+        else:
+            return tuple(fullname.split('.'))
+
     def get_index_text(self, modname: str, name: Tuple[str, str]) -> str:
         """Return the text for the index entry of the object."""
         raise NotImplementedError('must be implemented in subclasses')
@@ -637,6 +652,25 @@ class PyObject(ObjectDescription[Tuple[str, str]]):
                 self.env.ref_context['py:module'] = modules.pop()
             else:
                 self.env.ref_context.pop('py:module')
+
+    def _toc_entry_name(self, sig_node: desc_signature) -> str:
+        if not sig_node.get('_toc_parts'):
+            return ''
+
+        config = self.env.app.config
+        objtype = sig_node.parent.get('objtype')
+        if config.add_function_parentheses and objtype in {'function', 'method'}:
+            parens = '()'
+        else:
+            parens = ''
+        *parents, name = sig_node['_toc_parts']
+        if config.toc_object_entries_show_parents == 'domain':
+            return sig_node.get('fullname', name) + parens
+        if config.toc_object_entries_show_parents == 'hide':
+            return name + parens
+        if config.toc_object_entries_show_parents == 'all':
+            return '.'.join(parents + [name + parens])
+        return ''
 
 
 class PyFunction(PyObject):
@@ -795,6 +829,8 @@ class PyMethod(PyObject):
             prefix.append(nodes.Text('classmethod'))
             prefix.append(addnodes.desc_sig_space())
         if 'property' in self.options:
+            logger.warning(_('Using the :property: flag with the py:method directive'
+                             'is deprecated, use ".. py:property::" instead.'))
             prefix.append(nodes.Text('property'))
             prefix.append(addnodes.desc_sig_space())
         if 'staticmethod' in self.options:
@@ -965,7 +1001,7 @@ class PyModule(SphinxDirective):
     Directive to mark description of a new module.
     """
 
-    has_content = False
+    has_content = True
     required_arguments = 1
     optional_arguments = 0
     final_argument_whitespace = False
@@ -973,6 +1009,7 @@ class PyModule(SphinxDirective):
         'platform': lambda x: x,
         'synopsis': lambda x: x,
         'noindex': directives.flag,
+        'nocontentsentry': directives.flag,
         'deprecated': directives.flag,
     }
 
@@ -982,6 +1019,13 @@ class PyModule(SphinxDirective):
         modname = self.arguments[0].strip()
         noindex = 'noindex' in self.options
         self.env.ref_context['py:module'] = modname
+
+        content_node: Element = nodes.section()
+        with switch_source_input(self.state, self.content):
+            # necessary so that the child nodes get the right source/line set
+            content_node.document = self.state.document
+            nested_parse_with_titles(self.state, self.content, content_node)
+
         ret: List[Node] = []
         if not noindex:
             # note module to the domain
@@ -1003,6 +1047,7 @@ class PyModule(SphinxDirective):
             indextext = '%s; %s' % (pairindextypes['module'], modname)
             inode = addnodes.index(entries=[('pair', indextext, node_id, '', None)])
             ret.append(inode)
+        ret.extend(content_node.children)
         return ret
 
     def make_old_id(self, name: str) -> str:
@@ -1365,7 +1410,14 @@ class PythonDomain(Domain):
 
         # always search in "refspecific" mode with the :any: role
         matches = self.find_obj(env, modname, clsname, target, None, 1)
+        multiple_matches = len(matches) > 1
+
         for name, obj in matches:
+
+            if multiple_matches and obj.aliased:
+                # Skip duplicated matches
+                continue
+
             if obj[2] == 'module':
                 results.append(('py:mod',
                                 self._make_module_refnode(builder, fromdocname,

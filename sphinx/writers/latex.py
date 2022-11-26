@@ -8,7 +8,7 @@ import re
 import warnings
 from collections import defaultdict
 from os import path
-from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Set, Tuple, cast
+from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Optional, Set, Tuple, cast
 
 from docutils import nodes, writers
 from docutils.nodes import Element, Node, Text
@@ -97,8 +97,24 @@ class Table:
         self.body: List[str] = []
         self.align = node.get('align', 'default')
         self.classes: List[str] = node.get('classes', [])
+        self.styles: List[str] = []
+        if 'standard' in self.classes:
+            self.styles.append('standard')
+        elif 'borderless' in self.classes:
+            self.styles.append('borderless')
+        elif 'booktabs' in self.classes:
+            self.styles.append('booktabs')
+        if 'nocolorrows' in self.classes:
+            self.styles.append('nocolorrows')
+        elif 'colorrows' in self.classes:
+            self.styles.append('colorrows')
         self.colcount = 0
         self.colspec: str = None
+        self.colsep: str = None
+        if 'booktabs' in self.styles or 'borderless' in self.styles:
+            self.colsep = ''
+        elif 'standard' in self.styles:
+            self.colsep = '|'
         self.colwidths: List[int] = []
         self.has_problematic = False
         self.has_oldproblematic = False
@@ -143,23 +159,30 @@ class Table:
 
         This is what LaTeX calls the 'preamble argument' of the used table environment.
 
-        .. note:: the ``\\X`` and ``T`` column type specifiers are defined in ``sphinx.sty``.
+        .. note::
+
+           The ``\\X`` and ``T`` column type specifiers are defined in
+           ``sphinxlatextables.sty``.
         """
         if self.colspec:
             return self.colspec
-        elif self.colwidths and 'colwidths-given' in self.classes:
+
+        _colsep = self.colsep
+        if self.colwidths and 'colwidths-given' in self.classes:
             total = sum(self.colwidths)
             colspecs = [r'\X{%d}{%d}' % (width, total) for width in self.colwidths]
-            return '{|%s|}' % '|'.join(colspecs) + CR
+            return '{%s%s%s}' % (_colsep, _colsep.join(colspecs), _colsep) + CR
         elif self.has_problematic:
-            return r'{|*{%d}{\X{1}{%d}|}}' % (self.colcount, self.colcount) + CR
+            return r'{%s*{%d}{\X{1}{%d}%s}}' % (_colsep, self.colcount,
+                                                self.colcount, _colsep) + CR
         elif self.get_table_type() == 'tabulary':
             # sphinx.sty sets T to be J by default.
-            return '{|' + ('T|' * self.colcount) + '}' + CR
+            return '{' + _colsep + (('T' + _colsep) * self.colcount) + '}' + CR
         elif self.has_oldproblematic:
-            return r'{|*{%d}{\X{1}{%d}|}}' % (self.colcount, self.colcount) + CR
+            return r'{%s*{%d}{\X{1}{%d}%s}}' % (_colsep, self.colcount,
+                                                self.colcount, _colsep) + CR
         else:
-            return '{|' + ('l|' * self.colcount) + '}' + CR
+            return '{' + _colsep + (('l' + _colsep) * self.colcount) + '}' + CR
 
     def add_cell(self, height: int, width: int) -> None:
         """Adds a new cell to a table.
@@ -172,7 +195,9 @@ class Table:
                 assert self.cells[(self.row + row, self.col + col)] == 0
                 self.cells[(self.row + row, self.col + col)] = self.cell_id
 
-    def cell(self, row: int = None, col: int = None) -> "TableCell":
+    def cell(
+        self, row: Optional[int] = None, col: Optional[int] = None
+    ) -> Optional["TableCell"]:
         """Returns a cell object (i.e. rectangular area) containing given position.
 
         If no option arguments: ``row`` or ``col`` are given, the current position;
@@ -257,7 +282,7 @@ def rstdim_to_latexdim(width_str: str, scale: int = 100) -> str:
 
 
 class LaTeXTranslator(SphinxTranslator):
-    builder: "LaTeXBuilder" = None
+    builder: "LaTeXBuilder"
 
     secnumdepth = 2  # legacy sphinxhowto.cls uses this, whereas article.cls
     # default is originally 3. For book/report, 2 is already LaTeX default.
@@ -408,9 +433,9 @@ class LaTeXTranslator(SphinxTranslator):
         self.context: List[Any] = []
         self.descstack: List[str] = []
         self.tables: List[Table] = []
-        self.next_table_colspec: str = None
+        self.next_table_colspec: Optional[str] = None
         self.bodystack: List[List[str]] = []
-        self.footnote_restricted: Element = None
+        self.footnote_restricted: Optional[Element] = None
         self.pending_footnotes: List[nodes.footnote_reference] = []
         self.curfilestack: List[str] = []
         self.handled_abbrs: Set[str] = set()
@@ -528,7 +553,7 @@ class LaTeXTranslator(SphinxTranslator):
         return renderer.render(template_name, variables)
 
     @property
-    def table(self) -> Table:
+    def table(self) -> Optional[Table]:
         """Get current table."""
         if self.tables:
             return self.tables[-1]
@@ -732,10 +757,10 @@ class LaTeXTranslator(SphinxTranslator):
         self.body.append('}')
 
     def visit_desc_signature(self, node: Element) -> None:
+        hyper = ''
         if node.parent['objtype'] != 'describe' and node['ids']:
-            hyper = self.hypertarget(node['ids'][0])
-        else:
-            hyper = ''
+            for id in node['ids']:
+                hyper += self.hypertarget(id)
         self.body.append(hyper)
         if not self.in_desc_signature:
             self.in_desc_signature = True
@@ -900,8 +925,19 @@ class LaTeXTranslator(SphinxTranslator):
                 (self.curfilestack[-1], node.line or ''))
 
         self.tables.append(Table(node))
+        if self.table.colsep is None:
+            self.table.colsep = '' if (
+                'booktabs' in self.builder.config.latex_table_style or
+                'borderless' in self.builder.config.latex_table_style
+            ) else '|'
         if self.next_table_colspec:
             self.table.colspec = '{%s}' % self.next_table_colspec + CR
+            if '|' in self.table.colspec:
+                self.table.styles.append('vlines')
+                self.table.colsep = '|'
+            else:
+                self.table.styles.append('novlines')
+                self.table.colsep = ''
             if 'colwidths-given' in node.get('classes', []):
                 logger.info(__('both tabularcolumns and :widths: option are given. '
                                ':widths: is ignored.'), location=node)
@@ -911,7 +947,7 @@ class LaTeXTranslator(SphinxTranslator):
         labels = self.hypertarget_to(node)
         table_type = self.table.get_table_type()
         table = self.render(table_type + '.tex_t',
-                            dict(table=self.table, labels=labels))
+                            {'table': self.table, 'labels': labels})
         self.body.append(BLANKLINE)
         self.body.append(table)
         self.body.append(CR)
@@ -939,6 +975,8 @@ class LaTeXTranslator(SphinxTranslator):
         self.pushbody(self.table.header)
 
     def depart_thead(self, node: Element) -> None:
+        if self.body and self.body[-1] == r'\sphinxhline':
+            self.body.pop()
         self.popbody()
 
     def visit_tbody(self, node: Element) -> None:
@@ -946,11 +984,13 @@ class LaTeXTranslator(SphinxTranslator):
         self.pushbody(self.table.body)
 
     def depart_tbody(self, node: Element) -> None:
+        if self.body and self.body[-1] == r'\sphinxhline':
+            self.body.pop()
         self.popbody()
 
     def visit_row(self, node: Element) -> None:
         self.table.col = 0
-
+        _colsep = self.table.colsep
         # fill columns if the row starts with the bottom of multirow cell
         while True:
             cell = self.table.cell(self.table.row, self.table.col)
@@ -964,24 +1004,35 @@ class LaTeXTranslator(SphinxTranslator):
                     # insert suitable strut for equalizing row heights in given multirow
                     self.body.append(r'\sphinxtablestrut{%d}' % cell.cell_id)
                 else:  # use \multicolumn for wide multirow cell
-                    self.body.append(r'\multicolumn{%d}{|l|}{\sphinxtablestrut{%d}}' %
-                                     (cell.width, cell.cell_id))
+                    self.body.append(r'\multicolumn{%d}{%sl%s}{\sphinxtablestrut{%d}}' %
+                                     (cell.width, _colsep, _colsep, cell.cell_id))
 
     def depart_row(self, node: Element) -> None:
         self.body.append(r'\\' + CR)
         cells = [self.table.cell(self.table.row, i) for i in range(self.table.colcount)]
         underlined = [cell.row + cell.height == self.table.row + 1 for cell in cells]
         if all(underlined):
-            self.body.append(r'\hline')
+            self.body.append(r'\sphinxhline')
         else:
             i = 0
             underlined.extend([False])  # sentinel
-            while i < len(underlined):
-                if underlined[i] is True:
-                    j = underlined[i:].index(False)
-                    self.body.append(r'\cline{%d-%d}' % (i + 1, i + j))
-                    i += j
+            if underlined[0] is False:
+                i = 1
+                while i < self.table.colcount and underlined[i] is False:
+                    if cells[i - 1].cell_id != cells[i].cell_id:
+                        self.body.append(r'\sphinxvlinecrossing{%d}' % i)
+                    i += 1
+            while i < self.table.colcount:
+                # each time here underlined[i] is True
+                j = underlined[i:].index(False)
+                self.body.append(r'\sphinxcline{%d-%d}' % (i + 1, i + j))
+                i += j
                 i += 1
+                while i < self.table.colcount and underlined[i] is False:
+                    if cells[i - 1].cell_id != cells[i].cell_id:
+                        self.body.append(r'\sphinxvlinecrossing{%d}' % i)
+                    i += 1
+            self.body.append(r'\sphinxfixclines{%d}' % self.table.colcount)
         self.table.row += 1
 
     def visit_entry(self, node: Element) -> None:
@@ -990,12 +1041,14 @@ class LaTeXTranslator(SphinxTranslator):
         self.table.add_cell(node.get('morerows', 0) + 1, node.get('morecols', 0) + 1)
         cell = self.table.cell()
         context = ''
+        _colsep = self.table.colsep
         if cell.width > 1:
             if self.config.latex_use_latex_multicolumn:
                 if self.table.col == 0:
-                    self.body.append(r'\multicolumn{%d}{|l|}{%%' % cell.width + CR)
+                    self.body.append(r'\multicolumn{%d}{%sl%s}{%%' %
+                                     (cell.width, _colsep, _colsep) + CR)
                 else:
-                    self.body.append(r'\multicolumn{%d}{l|}{%%' % cell.width + CR)
+                    self.body.append(r'\multicolumn{%d}{l%s}{%%' % (cell.width, _colsep) + CR)
                 context = '}%' + CR
             else:
                 self.body.append(r'\sphinxstartmulticolumn{%d}%%' % cell.width + CR)
@@ -1035,6 +1088,7 @@ class LaTeXTranslator(SphinxTranslator):
 
         cell = self.table.cell()
         self.table.col += cell.width
+        _colsep = self.table.colsep
 
         # fill columns if next ones are a bottom of wide-multirow cell
         while True:
@@ -1042,16 +1096,16 @@ class LaTeXTranslator(SphinxTranslator):
             if nextcell is None:  # not a bottom of multirow cell
                 break
             else:  # a bottom part of multirow cell
-                self.table.col += nextcell.width
                 self.body.append('&')
                 if nextcell.width == 1:
                     # insert suitable strut for equalizing row heights in multirow
                     # they also serve to clear colour panels which would hide the text
                     self.body.append(r'\sphinxtablestrut{%d}' % nextcell.cell_id)
                 else:
-                    # use \multicolumn for wide multirow cell
-                    self.body.append(r'\multicolumn{%d}{l|}{\sphinxtablestrut{%d}}' %
-                                     (nextcell.width, nextcell.cell_id))
+                    # use \multicolumn for not first row of wide multirow cell
+                    self.body.append(r'\multicolumn{%d}{l%s}{\sphinxtablestrut{%d}}' %
+                                     (nextcell.width, _colsep, nextcell.cell_id))
+                self.table.col += nextcell.width
 
     def visit_acks(self, node: Element) -> None:
         # this is a list in the source, but should be rendered as a
@@ -1230,7 +1284,7 @@ class LaTeXTranslator(SphinxTranslator):
         # self.body.append(r'\columnbreak\n')
         pass
 
-    def latex_image_length(self, width_str: str, scale: int = 100) -> str:
+    def latex_image_length(self, width_str: str, scale: int = 100) -> Optional[str]:
         try:
             return rstdim_to_latexdim(width_str, scale)
         except ValueError:
@@ -1310,14 +1364,17 @@ class LaTeXTranslator(SphinxTranslator):
         if include_graphics_options:
             options = '[%s]' % ','.join(include_graphics_options)
         base, ext = path.splitext(uri)
+
         if self.in_title and base:
             # Lowercase tokens forcely because some fncychap themes capitalize
             # the options of \sphinxincludegraphics unexpectedly (ex. WIDTH=...).
-            self.body.append(r'\lowercase{\sphinxincludegraphics%s}{{%s}%s}' %
-                             (options, base, ext))
+            cmd = r'\lowercase{\sphinxincludegraphics%s}{{%s}%s}' % (options, base, ext)
         else:
-            self.body.append(r'\sphinxincludegraphics%s{{%s}%s}' %
-                             (options, base, ext))
+            cmd = r'\sphinxincludegraphics%s{{%s}%s}' % (options, base, ext)
+        # escape filepath for includegraphics, https://tex.stackexchange.com/a/202714/41112
+        if '#' in base:
+            cmd = r'{\catcode`\#=12' + cmd + '}'
+        self.body.append(cmd)
         self.body.extend(post)
 
     def depart_image(self, node: Element) -> None:
@@ -1770,15 +1827,10 @@ class LaTeXTranslator(SphinxTranslator):
 
         opts = self.config.highlight_options.get(lang, {})
         hlcode = self.highlighter.highlight_block(
-            node.astext(), lang, opts=opts, location=node)
-        # TODO: Use nowrap option once LaTeX formatter supports it
-        # https://github.com/pygments/pygments/pull/1343
-        hlcode = hlcode.replace(r'\begin{Verbatim}[commandchars=\\\{\}]',
-                                r'\sphinxcode{\sphinxupquote{%')
-        # get consistent trailer
-        hlcode = hlcode.rstrip()[:-15]  # strip \n\end{Verbatim}
-        self.body.append(hlcode)
-        self.body.append('%' + CR + '}}')
+            node.astext(), lang, opts=opts, location=node, nowrap=True)
+        self.body.append(r'\sphinxcode{\sphinxupquote{%' + CR
+                         + hlcode.rstrip() + '%' + CR  # NoQA: W503
+                         + '}}')  # NoQA: W503
         raise nodes.SkipNode
 
     def depart_literal(self, node: Element) -> None:

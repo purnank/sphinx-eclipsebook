@@ -3,14 +3,17 @@
 import codecs
 import pickle
 import time
+import warnings
 from os import path
 from typing import (TYPE_CHECKING, Any, Dict, Iterable, List, Optional, Sequence, Set, Tuple,
                     Type, Union)
 
 from docutils import nodes
 from docutils.nodes import Node
+from docutils.utils import DependencyList
 
 from sphinx.config import Config
+from sphinx.deprecation import RemovedInSphinx70Warning
 from sphinx.environment import CONFIG_CHANGED_REASON, CONFIG_OK, BuildEnvironment
 from sphinx.environment.adapters.asset import ImageAdapter
 from sphinx.errors import SphinxError
@@ -75,7 +78,7 @@ class Builder:
     #: The builder supports data URIs or not.
     supported_data_uri_images = False
 
-    def __init__(self, app: "Sphinx") -> None:
+    def __init__(self, app: "Sphinx", env: BuildEnvironment = None) -> None:
         self.srcdir = app.srcdir
         self.confdir = app.confdir
         self.outdir = app.outdir
@@ -83,7 +86,15 @@ class Builder:
         ensuredir(self.doctreedir)
 
         self.app: Sphinx = app
-        self.env: Optional[BuildEnvironment] = None
+        if env is not None:
+            self.env: BuildEnvironment = env
+            self.env.set_versioning_method(self.versioning_method,
+                                           self.versioning_compare)
+        else:
+            # ... is passed by SphinxComponentRegistry.create_builder to not show two warnings.
+            warnings.warn("The 'env' argument to Builder will be required from Sphinx 7.",
+                          RemovedInSphinx70Warning, stacklevel=2)
+            self.env = None
         self.events: EventManager = app.events
         self.config: Config = app.config
         self.tags: Tags = app.tags
@@ -105,6 +116,9 @@ class Builder:
 
     def set_environment(self, env: BuildEnvironment) -> None:
         """Store BuildEnvironment object."""
+        warnings.warn("Builder.set_environment is deprecated, pass env to "
+                      "'Builder.__init__()' instead.",
+                      RemovedInSphinx70Warning, stacklevel=2)
         self.env = env
         self.env.set_versioning_method(self.versioning_method,
                                        self.versioning_compare)
@@ -238,6 +252,7 @@ class Builder:
         message = __('targets for %d po files that are specified') % len(catalogs)
         self.compile_catalogs(catalogs, message)
 
+    # TODO(stephenfin): This would make more sense as 'compile_outdated_catalogs'
     def compile_update_catalogs(self) -> None:
         repo = CatalogRepository(self.srcdir, self.config.locale_dirs,
                                  self.config.language, self.config.source_encoding)
@@ -249,37 +264,44 @@ class Builder:
 
     def build_all(self) -> None:
         """Build all source files."""
+        self.compile_all_catalogs()
+
         self.build(None, summary=__('all source files'), method='all')
 
     def build_specific(self, filenames: List[str]) -> None:
         """Only rebuild as much as needed for changes in the *filenames*."""
-        # bring the filenames to the canonical format, that is,
-        # relative to the source directory and without source_suffix.
-        dirlen = len(self.srcdir) + 1
-        to_write = []
-        suffixes: Tuple[str] = tuple(self.config.source_suffix)  # type: ignore
+        docnames: List[str] = []
+
         for filename in filenames:
             filename = path.normpath(path.abspath(filename))
+
+            if not path.isfile(filename):
+                logger.warning(__('file %r given on command line does not exist, '),
+                               filename)
+                continue
+
             if not filename.startswith(self.srcdir):
                 logger.warning(__('file %r given on command line is not under the '
                                   'source directory, ignoring'), filename)
                 continue
-            if not path.isfile(filename):
-                logger.warning(__('file %r given on command line does not exist, '
-                                  'ignoring'), filename)
+
+            docname = self.env.path2doc(filename)
+            if not docname:
+                logger.warning(__('file %r given on command line is not a valid '
+                                  'document, ignoring'), filename)
                 continue
-            filename = filename[dirlen:]
-            for suffix in suffixes:
-                if filename.endswith(suffix):
-                    filename = filename[:-len(suffix)]
-                    break
-            filename = filename.replace(path.sep, SEP)
-            to_write.append(filename)
-        self.build(to_write, method='specific',
-                   summary=__('%d source files given on command line') % len(to_write))
+
+            docnames.append(docname)
+
+        self.compile_specific_catalogs(filenames)
+
+        self.build(docnames, method='specific',
+                   summary=__('%d source files given on command line') % len(docnames))
 
     def build_update(self) -> None:
         """Only rebuild what was changed or added since last build."""
+        self.compile_update_catalogs()
+
         to_build = self.get_outdated_docs()
         if isinstance(to_build, str):
             self.build(['__all__'], to_build)
@@ -289,7 +311,9 @@ class Builder:
                        summary=__('targets for %d source files that are out of date') %
                        len(to_build))
 
-    def build(self, docnames: Iterable[str], summary: str = None, method: str = 'update') -> None:  # NOQA
+    def build(
+        self, docnames: Iterable[str], summary: Optional[str] = None, method: str = 'update'
+    ) -> None:
         """Main build method.
 
         First updates the environment, and then calls :meth:`write`.
@@ -475,6 +499,9 @@ class Builder:
         filename = self.env.doc2path(docname)
         filetype = get_filetype(self.app.config.source_suffix, filename)
         publisher = self.app.registry.get_publisher(self.app, filetype)
+        # record_dependencies is mutable even though it is in settings,
+        # explicitly re-initialise for each document
+        publisher.settings.record_dependencies = DependencyList()
         with sphinx_domains(self.env), rst.default_role(docname, self.config.default_role):
             # set up error_handler for the target document
             codecs.register_error('sphinx', UnicodeDecodeErrorHandler(docname))  # type: ignore

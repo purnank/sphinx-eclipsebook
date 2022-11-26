@@ -841,9 +841,9 @@ def test_domain_cpp_ast_templates():
     check('class', 'abc::ns::foo{{id_0, id_1, ...id_2}} {key}xyz::bar',
           {2: 'I00DpEXN3abc2ns3fooEI4id_04id_1sp4id_2EEN3xyz3barE'})
     check('class', 'abc::ns::foo{{id_0, id_1, id_2}} {key}xyz::bar<id_0, id_1, id_2>',
-          {2: 'I000EXN3abc2ns3fooEI4id_04id_14id_2EEN3xyz3barI4id_04id_14id_2EE'})
+          {2: 'I000EXN3abc2ns3fooEI4id_04id_14id_2EEN3xyz3barE'})
     check('class', 'abc::ns::foo{{id_0, id_1, ...id_2}} {key}xyz::bar<id_0, id_1, id_2...>',
-          {2: 'I00DpEXN3abc2ns3fooEI4id_04id_1sp4id_2EEN3xyz3barI4id_04id_1Dp4id_2EE'})
+          {2: 'I00DpEXN3abc2ns3fooEI4id_04id_1sp4id_2EEN3xyz3barE'})
 
     check('class', 'template<> Concept{{U}} {key}A<int>::B', {2: 'IEI0EX7ConceptI1UEEN1AIiE1BE'})
 
@@ -876,6 +876,9 @@ def test_domain_cpp_ast_templates():
     # defaulted constrained type parameters
     check('type', 'template<C T = int&> {key}A', {2: 'I_1CE1A'}, key='using')
 
+    # pack expansion after non-type template parameter
+    check('type', 'template<int (X::*)(bool)...> {key}A', {2: 'I_DpM1XFibEE1A'}, key='using')
+
 
 def test_domain_cpp_ast_placeholder_types():
     check('function', 'void f(Sortable auto &v)', {1: 'f__SortableR', 2: '1fR8Sortable'})
@@ -891,8 +894,33 @@ def test_domain_cpp_ast_requires_clauses():
           {4: 'I0EIQaa1A1BE1fvv'})
     check('function', 'template<typename T> requires A || B or C void f()',
           {4: 'I0EIQoo1Aoo1B1CE1fvv'})
+    check('function', 'void f() requires A || B || C',
+          {4: 'IQoo1Aoo1B1CE1fv'})
+    check('function', 'Foo() requires A || B || C',
+          {4: 'IQoo1Aoo1B1CE3Foov'})
     check('function', 'template<typename T> requires A && B || C and D void f()',
           {4: 'I0EIQooaa1A1Baa1C1DE1fvv'})
+    check('function',
+          'template<typename T> requires R<T> ' +
+          'template<typename U> requires S<T> ' +
+          'void A<T>::f() requires B',
+          {4: 'I0EIQ1RI1TEEI0EIQaa1SI1TE1BEN1A1fEvv'})
+    check('function',
+          'template<template<typename T> requires R<T> typename X> ' +
+          'void f()',
+          {2: 'II0EIQ1RI1TEE0E1fv', 4: 'II0EIQ1RI1TEE0E1fvv'})
+    check('type',
+          'template<typename T> requires IsValid<T> {key}T = true_type',
+          {4: 'I0EIQ7IsValidI1TEE1T'}, key='using')
+    check('class',
+          'template<typename T> requires IsValid<T> {key}T : Base',
+          {4: 'I0EIQ7IsValidI1TEE1T'}, key='class')
+    check('union',
+          'template<typename T> requires IsValid<T> {key}T',
+          {4: 'I0EIQ7IsValidI1TEE1T'}, key='union')
+    check('member',
+          'template<typename T> requires IsValid<T> int Val = 7',
+          {4: 'I0EIQ7IsValidI1TEE3Val'})
 
 
 def test_domain_cpp_ast_template_args():
@@ -1015,6 +1043,38 @@ def test_domain_cpp_ast_xref_parsing():
     check('T f()')
 
 
+@pytest.mark.parametrize(
+    'param,is_pack',
+    [('typename', False),
+     ('typename T', False),
+     ('typename...', True),
+     ('typename... T', True),
+     ('int', False),
+     ('int N', False),
+     ('int* N', False),
+     ('int& N', False),
+     ('int&... N', True),
+     ('int*... N', True),
+     ('int...', True),
+     ('int... N', True),
+     ('auto', False),
+     ('auto...', True),
+     ('int X::*', False),
+     ('int X::*...', True),
+     ('int (X::*)(bool)', False),
+     ('int (X::*x)(bool)', False),
+     ('int (X::*)(bool)...', True),
+     ('template<typename> class', False),
+     ('template<typename> class...', True),
+     ])
+def test_domain_cpp_template_parameters_is_pack(param: str, is_pack: bool):
+    def parse_template_parameter(param: str):
+        ast = parse('type', 'template<' + param + '> X')
+        return ast.templatePrefix.templates[0].params[0]
+    ast = parse_template_parameter(param)
+    assert ast.isPack == is_pack
+
+
 # def test_print():
 #     # used for getting all the ids out for checking
 #     for a in ids:
@@ -1113,11 +1173,11 @@ def test_domain_cpp_build_misuse_of_roles(app, status, warning):
                 if targetType == 'templateParam':
                     warn.append("WARNING: cpp:{} targets a {} (".format(r, txtTargetType))
                     warn.append("WARNING: cpp:{} targets a {} (".format(r, txtTargetType))
-    warn = list(sorted(warn))
+    warn = sorted(warn)
     for w in ws:
         assert "targets a" in w
     ws = [w[w.index("WARNING:"):] for w in ws]
-    ws = list(sorted(ws))
+    ws = sorted(ws)
     print("Expected warnings:")
     for w in warn:
         print(w)
@@ -1140,7 +1200,7 @@ def test_domain_cpp_build_with_add_function_parentheses_is_True(app, status, war
         res = re.search(pattern, text)
         if not res:
             print("Pattern\n\t%s\nnot found in %s" % (pattern, file))
-            assert False
+            raise AssertionError()
     rolePatterns = [
         ('', 'Sphinx'),
         ('', 'Sphinx::version'),
@@ -1181,7 +1241,7 @@ def test_domain_cpp_build_with_add_function_parentheses_is_False(app, status, wa
         res = re.search(pattern, text)
         if not res:
             print("Pattern\n\t%s\nnot found in %s" % (pattern, file))
-            assert False
+            raise AssertionError()
     rolePatterns = [
         ('', 'Sphinx'),
         ('', 'Sphinx::version'),
@@ -1240,7 +1300,7 @@ not found in `{test}`
         def __init__(self, role, root, contents):
             self.name = role
             self.classes = classes(role, root)
-            self.content_classes = dict()
+            self.content_classes = {}
             for tag in contents:
                 self.content_classes[tag] = classes(role, tag)
 
@@ -1370,3 +1430,53 @@ def test_domain_cpp_parse_mix_decl_duplicate(app, warning):
     assert "index.rst:3: WARNING: Duplicate C++ declaration, also defined at index:1." in ws[2]
     assert "Declaration is '.. cpp:struct:: A'." in ws[3]
     assert ws[4] == ""
+
+
+# For some reason, using the default testroot of "root" leads to the contents of
+# `test-root/objects.txt` polluting the symbol table depending on the test
+# execution order.  Using a testroot of "config" seems to avoid that problem.
+@pytest.mark.sphinx(testroot='config')
+def test_domain_cpp_normalize_unspecialized_template_args(make_app, app_params):
+    args, kwargs = app_params
+
+    text1 = (".. cpp:class:: template <typename T> A\n")
+    text2 = (".. cpp:class:: template <typename T> template <typename U> A<T>::B\n")
+
+    app1 = make_app(*args, **kwargs)
+    restructuredtext.parse(app=app1, text=text1, docname='text1')
+    root1 = app1.env.domaindata['cpp']['root_symbol']
+
+    assert root1.dump(1) == (
+        '  ::\n'
+        '    template<typename T> \n'
+        '    A: {class} template<typename T> A\t(text1)\n'
+        '      T: {templateParam} typename T\t(text1)\n'
+    )
+
+    app2 = make_app(*args, **kwargs)
+    restructuredtext.parse(app=app2, text=text2, docname='text2')
+    root2 = app2.env.domaindata['cpp']['root_symbol']
+
+    assert root2.dump(1) == (
+        '  ::\n'
+        '    template<typename T> \n'
+        '    A\n'
+        '      T\n'
+        '      template<typename U> \n'
+        '      B: {class} template<typename T> template<typename U> A<T>::B\t(text2)\n'
+        '        U: {templateParam} typename U\t(text2)\n'
+    )
+
+    root2.merge_with(root1, ['text1'], app2.env)
+
+    assert root2.dump(1) == (
+        '  ::\n'
+        '    template<typename T> \n'
+        '    A: {class} template<typename T> A\t(text1)\n'
+        '      T: {templateParam} typename T\t(text1)\n'
+        '      template<typename U> \n'
+        '      B: {class} template<typename T> template<typename U> A<T>::B\t(text2)\n'
+        '        U: {templateParam} typename U\t(text2)\n'
+    )
+    warning = app2._warning.getvalue()
+    assert 'Internal C++ domain error during symbol merging' not in warning

@@ -22,7 +22,7 @@ import re
 import sys
 from gettext import NullTranslations
 from os import path
-from typing import Any, Dict, List, NamedTuple, Sequence, Set, Tuple, Type
+from typing import Any, Dict, List, NamedTuple, Optional, Sequence, Set, Tuple, Type
 
 from jinja2 import TemplateNotFound
 from jinja2.sandbox import SandboxedEnvironment
@@ -212,7 +212,8 @@ def generate_autosummary_content(name: str, obj: Any, parent: Any,
                                  template: AutosummaryRenderer, template_name: str,
                                  imported_members: bool, app: Any,
                                  recursive: bool, context: Dict,
-                                 modname: str = None, qualname: str = None) -> str:
+                                 modname: Optional[str] = None,
+                                 qualname: Optional[str] = None) -> str:
     doc = get_documenter(app, obj, parent)
 
     def skip_member(obj: Any, name: str, objtype: str) -> bool:
@@ -351,11 +352,11 @@ def generate_autosummary_content(name: str, obj: Any, parent: Any,
         return template.render(doc.objtype, ns)
 
 
-def generate_autosummary_docs(sources: List[str], output_dir: str = None,
-                              suffix: str = '.rst', base_path: str = None,
+def generate_autosummary_docs(sources: List[str], output_dir: Optional[str] = None,
+                              suffix: str = '.rst', base_path: Optional[str] = None,
                               imported_members: bool = False, app: Any = None,
                               overwrite: bool = True, encoding: str = 'utf-8') -> None:
-    showed_sources = list(sorted(sources))
+    showed_sources = sorted(sources)
     if len(showed_sources) > 20:
         showed_sources = showed_sources[:10] + ['...'] + showed_sources[-10:]
     logger.info(__('[autosummary] generating autosummary for: %s') %
@@ -404,7 +405,7 @@ def generate_autosummary_docs(sources: List[str], output_dir: str = None,
                 else:
                     exceptions = exc.exceptions + [exc2]
 
-                errors = list(set("* %s: %s" % (type(e).__name__, e) for e in exceptions))
+                errors = list({"* %s: %s" % (type(e).__name__, e) for e in exceptions})
                 logger.warning(__('[autosummary] failed to import %s.\nPossible hints:\n%s'),
                                entry.name, '\n'.join(errors))
                 continue
@@ -456,7 +457,9 @@ def find_autosummary_in_files(filenames: List[str]) -> List[AutosummaryEntry]:
     return documented
 
 
-def find_autosummary_in_docstring(name: str, filename: str = None) -> List[AutosummaryEntry]:
+def find_autosummary_in_docstring(
+    name: str, filename: Optional[str] = None
+) -> List[AutosummaryEntry]:
     """Find out what items are documented in the given object's docstring.
 
     See `find_autosummary_in_lines`.
@@ -468,7 +471,7 @@ def find_autosummary_in_docstring(name: str, filename: str = None) -> List[Autos
     except AttributeError:
         pass
     except ImportExceptionGroup as exc:
-        errors = list(set("* %s: %s" % (type(e).__name__, e) for e in exc.exceptions))
+        errors = list({"* %s: %s" % (type(e).__name__, e) for e in exc.exceptions})
         print('Failed to import %s.\nPossible hints:\n%s' % (name, '\n'.join(errors)))
     except SystemExit:
         print("Failed to import '%s'; the module executes module level "
@@ -476,8 +479,9 @@ def find_autosummary_in_docstring(name: str, filename: str = None) -> List[Autos
     return []
 
 
-def find_autosummary_in_lines(lines: List[str], module: str = None, filename: str = None
-                              ) -> List[AutosummaryEntry]:
+def find_autosummary_in_lines(
+    lines: List[str], module: Optional[str] = None, filename: Optional[str] = None
+) -> List[AutosummaryEntry]:
     """Find out what items appear in autosummary:: directives in the
     given lines.
 
@@ -501,7 +505,7 @@ def find_autosummary_in_lines(lines: List[str], module: str = None, filename: st
     documented: List[AutosummaryEntry] = []
 
     recursive = False
-    toctree: str = None
+    toctree: Optional[str] = None
     template = None
     current_module = module
     in_autosummary = False

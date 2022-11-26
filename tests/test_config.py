@@ -48,13 +48,13 @@ def test_core_config(app, status, warning):
 
     # invalid values
     with pytest.raises(AttributeError):
-        getattr(cfg, '_value')
+        cfg._value
     with pytest.raises(AttributeError):
-        getattr(cfg, 'nonexisting_value')
+        cfg.nonexisting_value
 
     # non-value attributes are deleted from the namespace
     with pytest.raises(AttributeError):
-        getattr(cfg, 'sys')
+        cfg.sys
 
     # setting attributes
     cfg.project = 'Foo'
@@ -411,7 +411,7 @@ def test_conf_py_language_none_warning(logger, tempdir):
     assert logger.warning.called
     assert logger.warning.call_args[0][0] == (
         "Invalid configuration value found: 'language = None'. "
-        "Update your configuration to a valid langauge code. "
+        "Update your configuration to a valid language code. "
         "Falling back to 'en' (English).")
 
 

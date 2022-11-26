@@ -18,6 +18,7 @@ from docutils.parsers.rst import Directive, directives, roles
 from docutils.parsers.rst.states import Inliner
 from docutils.statemachine import State, StateMachine, StringList
 from docutils.utils import Reporter, unescape
+from docutils.writers._html_base import HTMLTranslator
 
 from sphinx.deprecation import RemovedInSphinx70Warning, deprecated_alias
 from sphinx.errors import SphinxError
@@ -29,6 +30,8 @@ logger = logging.getLogger(__name__)
 report_re = re.compile('^(.+?:(?:\\d+)?): \\((DEBUG|INFO|WARNING|ERROR|SEVERE)/(\\d+)?\\) ')
 
 if TYPE_CHECKING:
+    from docutils.frontend import Values
+
     from sphinx.builders import Builder
     from sphinx.config import Config
     from sphinx.environment import BuildEnvironment
@@ -183,9 +186,45 @@ def using_user_docutils_conf(confdir: Optional[str]) -> Generator[None, None, No
 
 
 @contextmanager
+def du19_footnotes() -> Generator[None, None, None]:
+    def visit_footnote(self, node):
+        label_style = self.settings.footnote_references
+        if not isinstance(node.previous_sibling(), type(node)):
+            self.body.append(f'<aside class="footnote-list {label_style}">\n')
+        self.body.append(self.starttag(node, 'aside',
+                                       classes=[node.tagname, label_style],
+                                       role="note"))
+
+    def depart_footnote(self, node):
+        self.body.append('</aside>\n')
+        if not isinstance(node.next_node(descend=False, siblings=True),
+                          type(node)):
+            self.body.append('</aside>\n')
+
+    old_visit_footnote = HTMLTranslator.visit_footnote
+    old_depart_footnote = HTMLTranslator.depart_footnote
+
+    # Only apply on Docutils 0.18 or 0.18.1, as 0.17 and earlier used a <dl> based
+    # approach, and 0.19 and later use the fixed approach by default.
+    if docutils.__version_info__[:2] == (0, 18):
+        HTMLTranslator.visit_footnote = visit_footnote  # type: ignore[assignment]
+        HTMLTranslator.depart_footnote = depart_footnote  # type: ignore[assignment]
+
+    try:
+        yield
+    finally:
+        if docutils.__version_info__[:2] == (0, 18):
+            HTMLTranslator.visit_footnote = old_visit_footnote  # type: ignore[assignment]
+            HTMLTranslator.depart_footnote = old_depart_footnote  # type: ignore[assignment]
+
+
+@contextmanager
 def patch_docutils(confdir: Optional[str] = None) -> Generator[None, None, None]:
     """Patch to docutils temporarily."""
-    with patched_get_language(), patched_rst_get_language(), using_user_docutils_conf(confdir):
+    with patched_get_language(), \
+         patched_rst_get_language(), \
+         using_user_docutils_conf(confdir), \
+         du19_footnotes():
         yield
 
 
@@ -550,9 +589,9 @@ class SphinxTranslator(nodes.NodeVisitor):
 
 
 # Node.findall() is a new interface to traverse a doctree since docutils-0.18.
-# This applies a patch docutils-0.17 or older to be available Node.findall()
+# This applies a patch to docutils up to 0.18 inclusive to provide Node.findall()
 # method to use it from our codebase.
-if docutils.__version_info__ < (0, 18):
+if docutils.__version_info__ <= (0, 18):
     def findall(self, *args, **kwargs):
         return iter(self.traverse(*args, **kwargs))
 
@@ -561,7 +600,7 @@ if docutils.__version_info__ < (0, 18):
 
 # cache a vanilla instance of nodes.document
 # Used in new_document() function
-__document_cache__: Optional[nodes.document] = None
+__document_cache__: Tuple["Values", Reporter]
 
 
 def new_document(source_path: str, settings: Any = None) -> nodes.document:
@@ -572,15 +611,18 @@ def new_document(source_path: str, settings: Any = None) -> nodes.document:
     This makes an instantiation of document nodes much faster.
     """
     global __document_cache__
-    if __document_cache__ is None:
-        __document_cache__ = docutils.utils.new_document(source_path)
+    try:
+        cached_settings, reporter = __document_cache__
+    except NameError:
+        doc = docutils.utils.new_document(source_path)
+        __document_cache__ = cached_settings, reporter = doc.settings, doc.reporter
 
     if settings is None:
-        # Make a copy of ``settings`` from cache to accelerate instantiation
-        settings = copy(__document_cache__.settings)
+        # Make a copy of the cached settings to accelerate instantiation
+        settings = copy(cached_settings)
 
     # Create a new instance of nodes.document using cached reporter
     from sphinx import addnodes
-    document = addnodes.document(settings, __document_cache__.reporter, source=source_path)
+    document = addnodes.document(settings, reporter, source=source_path)
     document.note_source(source_path, -1)
     return document

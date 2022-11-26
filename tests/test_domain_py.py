@@ -4,6 +4,7 @@ import re
 import sys
 from unittest.mock import Mock
 
+import docutils.utils
 import pytest
 from docutils import nodes
 
@@ -450,6 +451,33 @@ def test_pyfunction_signature_full(app):
                                                         [desc_sig_punctuation, ":"],
                                                         desc_sig_space,
                                                         [desc_sig_name, pending_xref, "str"])])])
+
+
+def test_pyfunction_with_unary_operators(app):
+    text = ".. py:function:: menu(egg=+1, bacon=-1, sausage=~1, spam=not spam)"
+    doctree = restructuredtext.parse(app, text)
+    assert_node(doctree[1][0][1],
+                [desc_parameterlist, ([desc_parameter, ([desc_sig_name, "egg"],
+                                                        [desc_sig_operator, "="],
+                                                        [nodes.inline, "+1"])],
+                                      [desc_parameter, ([desc_sig_name, "bacon"],
+                                                        [desc_sig_operator, "="],
+                                                        [nodes.inline, "-1"])],
+                                      [desc_parameter, ([desc_sig_name, "sausage"],
+                                                        [desc_sig_operator, "="],
+                                                        [nodes.inline, "~1"])],
+                                      [desc_parameter, ([desc_sig_name, "spam"],
+                                                        [desc_sig_operator, "="],
+                                                        [nodes.inline, "not spam"])])])
+
+
+def test_pyfunction_with_binary_operators(app):
+    text = ".. py:function:: menu(spam=2**64)"
+    doctree = restructuredtext.parse(app, text)
+    assert_node(doctree[1][0][1],
+                [desc_parameterlist, ([desc_parameter, ([desc_sig_name, "spam"],
+                                                        [desc_sig_operator, "="],
+                                                        [nodes.inline, "2**64"])])])
 
 
 @pytest.mark.skipif(sys.version_info < (3, 8), reason='python 3.8+ is required.')
@@ -1186,6 +1214,78 @@ def test_info_field_list_var(app):
                 refdomain="py", reftype="class", reftarget="int", **{"py:class": "Class"})
 
 
+def test_info_field_list_napoleon_deliminator_of(app):
+    text = (".. py:module:: example\n"
+            ".. py:class:: Class\n"
+            "\n"
+            "   :param list_str_var: example description.\n"
+            "   :type list_str_var: list of str\n"
+            "   :param tuple_int_var: example description.\n"
+            "   :type tuple_int_var: tuple of tuple of int\n"
+            )
+    doctree = restructuredtext.parse(app, text)
+
+    # :param list of str list_str_var:
+    assert_node(doctree[3][1][0][0][1][0][0][0],
+                ([addnodes.literal_strong, "list_str_var"],
+                 " (",
+                 [pending_xref, addnodes.literal_emphasis, "list"],
+                 [addnodes.literal_emphasis, " of "],
+                 [pending_xref, addnodes.literal_emphasis, "str"],
+                 ")",
+                 " -- ",
+                 "example description."))
+
+    # :param tuple of tuple of int tuple_int_var:
+    assert_node(doctree[3][1][0][0][1][0][1][0],
+                ([addnodes.literal_strong, "tuple_int_var"],
+                 " (",
+                 [pending_xref, addnodes.literal_emphasis, "tuple"],
+                 [addnodes.literal_emphasis, " of "],
+                 [pending_xref, addnodes.literal_emphasis, "tuple"],
+                 [addnodes.literal_emphasis, " of "],
+                 [pending_xref, addnodes.literal_emphasis, "int"],
+                 ")",
+                 " -- ",
+                 "example description."))
+
+
+def test_info_field_list_napoleon_deliminator_or(app):
+    text = (".. py:module:: example\n"
+            ".. py:class:: Class\n"
+            "\n"
+            "   :param bool_str_var: example description.\n"
+            "   :type bool_str_var: bool or str\n"
+            "   :param str_float_int_var: example description.\n"
+            "   :type str_float_int_var: str or float or int\n"
+            )
+    doctree = restructuredtext.parse(app, text)
+
+    # :param bool or str bool_str_var:
+    assert_node(doctree[3][1][0][0][1][0][0][0],
+                ([addnodes.literal_strong, "bool_str_var"],
+                 " (",
+                 [pending_xref, addnodes.literal_emphasis, "bool"],
+                 [addnodes.literal_emphasis, " or "],
+                 [pending_xref, addnodes.literal_emphasis, "str"],
+                 ")",
+                 " -- ",
+                 "example description."))
+
+    # :param str or float or int str_float_int_var:
+    assert_node(doctree[3][1][0][0][1][0][1][0],
+                ([addnodes.literal_strong, "str_float_int_var"],
+                 " (",
+                 [pending_xref, addnodes.literal_emphasis, "str"],
+                 [addnodes.literal_emphasis, " or "],
+                 [pending_xref, addnodes.literal_emphasis, "float"],
+                 [addnodes.literal_emphasis, " or "],
+                 [pending_xref, addnodes.literal_emphasis, "int"],
+                 ")",
+                 " -- ",
+                 "example description."))
+
+
 def test_type_field(app):
     text = (".. py:data:: var1\n"
             "   :type: .int\n"
@@ -1242,8 +1342,8 @@ def test_module_index(app):
     assert index.generate() == (
         [('d', [IndexEntry('docutils', 0, 'index', 'module-docutils', '', '', '')]),
          ('s', [IndexEntry('sphinx', 1, 'index', 'module-sphinx', '', '', ''),
-                IndexEntry('sphinx.builders', 2, 'index', 'module-sphinx.builders', '', '', ''),  # NOQA
-                IndexEntry('sphinx.builders.html', 2, 'index', 'module-sphinx.builders.html', '', '', ''),  # NOQA
+                IndexEntry('sphinx.builders', 2, 'index', 'module-sphinx.builders', '', '', ''),
+                IndexEntry('sphinx.builders.html', 2, 'index', 'module-sphinx.builders.html', '', '', ''),
                 IndexEntry('sphinx.config', 2, 'index', 'module-sphinx.config', '', '', ''),
                 IndexEntry('sphinx_intl', 0, 'index', 'module-sphinx_intl', '', '', '')])],
         False
@@ -1286,8 +1386,8 @@ def test_modindex_common_prefix(app):
     restructuredtext.parse(app, text)
     index = PythonModuleIndex(app.env.get_domain('py'))
     assert index.generate() == (
-        [('b', [IndexEntry('sphinx.builders', 1, 'index', 'module-sphinx.builders', '', '', ''),  # NOQA
-                IndexEntry('sphinx.builders.html', 2, 'index', 'module-sphinx.builders.html', '', '', '')]),  # NOQA
+        [('b', [IndexEntry('sphinx.builders', 1, 'index', 'module-sphinx.builders', '', '', ''),
+                IndexEntry('sphinx.builders.html', 2, 'index', 'module-sphinx.builders.html', '', '', '')]),
          ('c', [IndexEntry('sphinx.config', 0, 'index', 'module-sphinx.config', '', '', '')]),
          ('d', [IndexEntry('docutils', 0, 'index', 'module-docutils', '', '', '')]),
          ('s', [IndexEntry('sphinx', 0, 'index', 'module-sphinx', '', '', ''),
@@ -1342,6 +1442,19 @@ def test_python_python_use_unqualified_type_names_disabled(app, status, warning)
 @pytest.mark.sphinx('dummy', testroot='domain-py-xref-warning')
 def test_warn_missing_reference(app, status, warning):
     app.build()
-    assert 'index.rst:6: WARNING: undefined label: no-label' in warning.getvalue()
-    assert ('index.rst:6: WARNING: Failed to create a cross reference. A title or caption not found: existing-label'
-            in warning.getvalue())
+    assert "index.rst:6: WARNING: undefined label: 'no-label'" in warning.getvalue()
+    assert ("index.rst:6: WARNING: Failed to create a cross reference. "
+            "A title or caption not found: 'existing-label'") in warning.getvalue()
+
+
+@pytest.mark.sphinx(confoverrides={'nitpicky': True})
+@pytest.mark.parametrize('include_options', (True, False))
+def test_signature_line_number(app, include_options):
+    text = (".. py:function:: foo(bar : string)\n" +
+            ("   :noindexentry:\n" if include_options else ""))
+    doc = restructuredtext.parse(app, text)
+    xrefs = list(doc.findall(condition=addnodes.pending_xref))
+    assert len(xrefs) == 1
+    source, line = docutils.utils.get_source_line(xrefs[0])
+    assert 'index.rst' in source
+    assert line == 1

@@ -649,12 +649,12 @@ def test_isattributedescriptor(app):
     assert inspect.isattributedescriptor(Base.meth) is False                   # method
     assert inspect.isattributedescriptor(Base.staticmeth) is False             # staticmethod
     assert inspect.isattributedescriptor(Base.classmeth) is False              # classmetho
-    assert inspect.isattributedescriptor(Descriptor) is False                  # custom descriptor class    # NOQA
-    assert inspect.isattributedescriptor(str.join) is False                    # MethodDescriptorType       # NOQA
-    assert inspect.isattributedescriptor(object.__init__) is False             # WrapperDescriptorType      # NOQA
-    assert inspect.isattributedescriptor(dict.__dict__['fromkeys']) is False   # ClassMethodDescriptorType  # NOQA
-    assert inspect.isattributedescriptor(types.FrameType.f_locals) is True     # GetSetDescriptorType       # NOQA
-    assert inspect.isattributedescriptor(datetime.timedelta.days) is True      # MemberDescriptorType       # NOQA
+    assert inspect.isattributedescriptor(Descriptor) is False                  # custom descriptor class
+    assert inspect.isattributedescriptor(str.join) is False                    # MethodDescriptorType
+    assert inspect.isattributedescriptor(object.__init__) is False             # WrapperDescriptorType
+    assert inspect.isattributedescriptor(dict.__dict__['fromkeys']) is False   # ClassMethodDescriptorType
+    assert inspect.isattributedescriptor(types.FrameType.f_locals) is True     # GetSetDescriptorType
+    assert inspect.isattributedescriptor(datetime.timedelta.days) is True      # MemberDescriptorType
 
     try:
         # _testcapi module cannot be importable in some distro
@@ -662,7 +662,7 @@ def test_isattributedescriptor(app):
         import _testcapi
 
         testinstancemethod = _testcapi.instancemethod(str.__repr__)
-        assert inspect.isattributedescriptor(testinstancemethod) is False      # instancemethod (C-API)     # NOQA
+        assert inspect.isattributedescriptor(testinstancemethod) is False      # instancemethod (C-API)
     except ImportError:
         pass
 
@@ -730,7 +730,7 @@ def test_getdoc_inherited_decorated_method():
             """
 
     class Bar(Foo):
-        @functools.lru_cache()
+        @functools.lru_cache()  # noqa: B019
         def meth(self):
             # inherited and decorated method
             pass
