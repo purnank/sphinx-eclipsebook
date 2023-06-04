@@ -441,17 +441,6 @@ The following directives are provided for module and class contents:
       Describe the location where the object is defined.  The default value is
       the module specified by :rst:dir:`py:currentmodule`.
 
-   .. rst:directive:option:: property
-      :type: no value
-
-      Indicate the method is a property.
-
-      .. versionadded:: 2.1
-
-      .. deprecated:: 4.0
-
-         Use :rst:dir:`py:property` instead.
-
    .. rst:directive:option:: staticmethod
       :type: no value
 
@@ -596,7 +585,7 @@ This will render like this:
    :param str recipient: The recipient of the message
    :param str message_body: The body of the message
    :param priority: The priority of the message, can be a number 1-5
-   :type priority: integer or None
+   :type priority: int or None
    :return: the message id
    :rtype: int
    :raises ValueError: if the message_body exceeds 160 characters

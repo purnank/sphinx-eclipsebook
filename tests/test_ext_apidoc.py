@@ -20,7 +20,7 @@ def apidoc(rootdir, tempdir, apidoc_params):
     return namedtuple('apidoc', 'coderoot,outdir')(coderoot, outdir)
 
 
-@pytest.fixture
+@pytest.fixture()
 def apidoc_params(request):
     pargs = {}
     kwargs = {}
@@ -318,7 +318,7 @@ def test_toc_all_references_should_exist_pep420_enabled(make_app, apidoc):
         if ref and ref[0] in (':', '#'):
             continue
         found_refs.append(ref)
-        filename = "{}.rst".format(ref)
+        filename = f"{ref}.rst"
         if not (outdir / filename).isfile():
             missing_files.append(filename)
 
@@ -347,7 +347,7 @@ def test_toc_all_references_should_exist_pep420_disabled(make_app, apidoc):
     for ref in refs:
         if ref and ref[0] in (':', '#'):
             continue
-        filename = "{}.rst".format(ref)
+        filename = f"{ref}.rst"
         found_refs.append(ref)
         if not (outdir / filename).isfile():
             missing_files.append(filename)
@@ -375,7 +375,7 @@ def extract_toc(path):
 
 @pytest.mark.apidoc(
     coderoot='test-apidoc-subpackage-in-toc',
-    options=['--separate']
+    options=['--separate'],
 )
 def test_subpackage_in_toc(make_app, apidoc):
     """Make sure that empty subpackages with non-empty subpackages in them

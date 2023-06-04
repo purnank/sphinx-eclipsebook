@@ -8,8 +8,14 @@ import pytest
 
 from sphinx import addnodes
 from sphinx.addnodes import desc
-from sphinx.domains.c import (DefinitionError, DefinitionParser, Symbol, _id_prefix,
-                              _macroKeywords, _max_id)
+from sphinx.domains.c import (
+    DefinitionError,
+    DefinitionParser,
+    Symbol,
+    _id_prefix,
+    _macroKeywords,
+    _max_id,
+)
 from sphinx.ext.intersphinx import load_mappings, normalize_intersphinx_mapping
 from sphinx.testing import restructuredtext
 from sphinx.testing.util import assert_node
@@ -470,12 +476,12 @@ def test_domain_c_ast_function_definitions():
     cvrs = ['', 'const', 'volatile', 'restrict', 'restrict volatile const']
     for cvr in cvrs:
         space = ' ' if len(cvr) != 0 else ''
-        check('function', 'void f(int arr[{}*])'.format(cvr), {1: 'f'})
-        check('function', 'void f(int arr[{}])'.format(cvr), {1: 'f'})
-        check('function', 'void f(int arr[{}{}42])'.format(cvr, space), {1: 'f'})
-        check('function', 'void f(int arr[static{}{} 42])'.format(space, cvr), {1: 'f'})
-        check('function', 'void f(int arr[{}{}static 42])'.format(cvr, space), {1: 'f'},
-              output='void f(int arr[static{}{} 42])'.format(space, cvr))
+        check('function', f'void f(int arr[{cvr}*])', {1: 'f'})
+        check('function', f'void f(int arr[{cvr}])', {1: 'f'})
+        check('function', f'void f(int arr[{cvr}{space}42])', {1: 'f'})
+        check('function', f'void f(int arr[static{space}{cvr} 42])', {1: 'f'})
+        check('function', f'void f(int arr[{cvr}{space}static 42])', {1: 'f'},
+              output=f'void f(int arr[static{space}{cvr} 42])')
     check('function', 'void f(int arr[const static volatile 42])', {1: 'f'},
           output='void f(int arr[static volatile const 42])')
 
@@ -611,9 +617,9 @@ def split_warnigns(warning):
 
 def filter_warnings(warning, file):
     lines = split_warnigns(warning)
-    res = [l for l in lines if "domain-c" in l and "{}.rst".format(file) in l and
+    res = [l for l in lines if "domain-c" in l and f"{file}.rst" in l and
            "WARNING: document isn't included in any toctree" not in l]
-    print("Filtered warnings for file '{}':".format(file))
+    print(f"Filtered warnings for file '{file}':")
     for w in res:
         print(w)
     return res
@@ -624,7 +630,7 @@ def extract_role_links(app, filename):
     lis = [l for l in t.split('\n') if l.startswith("<li")]
     entries = []
     for l in lis:
-        li = ElementTree.fromstring(l)
+        li = ElementTree.fromstring(l)  # NoQA: S314  # using known data in tests
         aList = list(li.iter('a'))
         assert len(aList) == 1
         a = aList[0]
@@ -652,7 +658,7 @@ def test_domain_c_build_namespace(app, status, warning):
     assert len(ws) == 0
     t = (app.outdir / "namespace.html").read_text(encoding='utf8')
     for id_ in ('NS.NSVar', 'NULLVar', 'ZeroVar', 'NS2.NS3.NS2NS3Var', 'PopVar'):
-        assert 'id="c.{}"'.format(id_) in t
+        assert f'id="c.{id_}"' in t
 
 
 @pytest.mark.sphinx(testroot='domain-c', confoverrides={'nitpicky': True})
@@ -735,7 +741,7 @@ def test_domain_c_build_intersphinx(tempdir, app, status, warning):
 
 .. c:type:: _type
 .. c:function:: void _functionParam(int param)
-"""  # noqa
+"""  # noqa: F841
     inv_file = tempdir / 'inventory'
     inv_file.write_bytes(b'''\
 # Sphinx inventory version 2
@@ -755,7 +761,7 @@ _struct c:struct 1 index.html#c.$ -
 _type c:type 1 index.html#c.$ -
 _union c:union 1 index.html#c.$ -
 _var c:member 1 index.html#c.$ -
-'''))  # noqa
+'''))  # noqa: W291
     app.config.intersphinx_mapping = {
         'https://localhost/intersphinx/c/': inv_file,
     }

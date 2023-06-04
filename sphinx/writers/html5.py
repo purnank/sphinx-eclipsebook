@@ -1,11 +1,12 @@
 """Experimental docutils writers for HTML5 handling Sphinx's custom nodes."""
 
+from __future__ import annotations
+
 import os
 import posixpath
 import re
 import urllib.parse
-import warnings
-from typing import TYPE_CHECKING, Iterable, Optional, Set, Tuple, cast
+from typing import TYPE_CHECKING, Iterable, cast
 
 from docutils import nodes
 from docutils.nodes import Element, Node, Text
@@ -13,7 +14,6 @@ from docutils.writers.html5_polyglot import HTMLTranslator as BaseTranslator
 
 from sphinx import addnodes
 from sphinx.builders import Builder
-from sphinx.deprecation import RemovedInSphinx60Warning
 from sphinx.locale import _, __, admonitionlabels
 from sphinx.util import logging
 from sphinx.util.docutils import SphinxTranslator
@@ -34,12 +34,11 @@ def multiply_length(length: str, scale: int) -> str:
     matched = re.match(r'^(\d*\.?\d*)\s*(\S*)$', length)
     if not matched:
         return length
-    elif scale == 100:
+    if scale == 100:
         return length
-    else:
-        amount, unit = matched.groups()
-        result = float(amount) * scale / 100
-        return "%s%s" % (int(result), unit)
+    amount, unit = matched.groups()
+    result = float(amount) * scale / 100
+    return f"{int(result)}{unit}"
 
 
 class HTML5Translator(SphinxTranslator, BaseTranslator):
@@ -47,11 +46,11 @@ class HTML5Translator(SphinxTranslator, BaseTranslator):
     Our custom HTML translator.
     """
 
-    builder: "StandaloneHTMLBuilder"
+    builder: StandaloneHTMLBuilder
     # Override docutils.writers.html5_polyglot:HTMLTranslator
     # otherwise, nodes like <inline classes="s">...</inline> will be
     # converted to <s>...</s> by `visit_inline`.
-    supported_inline_tags: Set[str] = set()
+    supported_inline_tags: set[str] = set()
 
     def __init__(self, document: nodes.document, builder: Builder) -> None:
         super().__init__(document, builder)
@@ -222,7 +221,7 @@ class HTML5Translator(SphinxTranslator, BaseTranslator):
                    'References must have "refuri" or "refid" attribute.'
             atts['href'] = '#' + node['refid']
         if not isinstance(node.parent, nodes.TextElement):
-            assert len(node) == 1 and isinstance(node[0], nodes.image)
+            assert len(node) == 1 and isinstance(node[0], nodes.image)  # NoQA: PT018
             atts['class'] += ' image-reference'
         if 'reftitle' in node:
             atts['title'] = node['reftitle']
@@ -251,7 +250,7 @@ class HTML5Translator(SphinxTranslator, BaseTranslator):
         if name:
             node.insert(0, nodes.title(name, admonitionlabels[name]))
 
-    def depart_admonition(self, node: Optional[Element] = None) -> None:
+    def depart_admonition(self, node: Element | None = None) -> None:
         self.body.append('</div>\n')
 
     def visit_seealso(self, node: Element) -> None:
@@ -260,14 +259,14 @@ class HTML5Translator(SphinxTranslator, BaseTranslator):
     def depart_seealso(self, node: Element) -> None:
         self.depart_admonition(node)
 
-    def get_secnumber(self, node: Element) -> Optional[Tuple[int, ...]]:
+    def get_secnumber(self, node: Element) -> tuple[int, ...] | None:
         if node.get('secnumber'):
             return node['secnumber']
 
         if isinstance(node.parent, nodes.section):
             if self.builder.name == 'singlehtml':
                 docname = self.docnames[-1]
-                anchorname = "%s/#%s" % (docname, node.parent['ids'][0])
+                anchorname = "{}/#{}".format(docname, node.parent['ids'][0])
                 if anchorname not in self.builder.secnumbers:
                     anchorname = "%s/" % docname  # try first heading which has no anchor
             else:
@@ -289,7 +288,7 @@ class HTML5Translator(SphinxTranslator, BaseTranslator):
     def add_fignumber(self, node: Element) -> None:
         def append_fignumber(figtype: str, figure_id: str) -> None:
             if self.builder.name == 'singlehtml':
-                key = "%s/%s" % (self.docnames[-1], figtype)
+                key = f"{self.docnames[-1]}/{figtype}"
             else:
                 key = figtype
 
@@ -388,7 +387,7 @@ class HTML5Translator(SphinxTranslator, BaseTranslator):
             elif close_tag.startswith('</a></h'):
                 self.body.append('</a><a class="headerlink" href="#%s" ' %
                                  node.parent['ids'][0] +
-                                 'title="%s">%s' % (
+                                 'title="{}">{}'.format(
                                      _('Permalink to this heading'),
                                      self.config.html_permalinks_icon))
             elif isinstance(node.parent, nodes.table):
@@ -416,7 +415,7 @@ class HTML5Translator(SphinxTranslator, BaseTranslator):
 
         highlighted = self.highlighter.highlight_block(
             node.rawsource, lang, opts=opts, linenos=linenos,
-            location=node, **highlight_args
+            location=node, **highlight_args,
         )
         starttag = self.starttag(node, 'div', suffix='',
                                  CLASS='highlight-%s notranslate' % lang)
@@ -576,8 +575,10 @@ class HTML5Translator(SphinxTranslator, BaseTranslator):
             if not ('width' in node and 'height' in node):
                 size = get_image_size(os.path.join(self.builder.srcdir, olduri))
                 if size is None:
-                    logger.warning(__('Could not obtain image size. :scale: option is ignored.'),  # NOQA
-                                   location=node)
+                    logger.warning(
+                        __('Could not obtain image size. :scale: option is ignored.'),
+                        location=node,
+                    )
                 else:
                     if 'width' not in node:
                         node['width'] = str(size[0])
@@ -807,7 +808,7 @@ class HTML5Translator(SphinxTranslator, BaseTranslator):
     def depart_math(self, node: Element, math_env: str = '') -> None:
         name = self.builder.math_renderer_name
         _, depart = self.builder.app.registry.html_inline_math_renderers[name]
-        if depart:
+        if depart:  # type: ignore[truthy-function]
             depart(self, node)
 
     def visit_math_block(self, node: Element, math_env: str = '') -> None:
@@ -818,32 +819,5 @@ class HTML5Translator(SphinxTranslator, BaseTranslator):
     def depart_math_block(self, node: Element, math_env: str = '') -> None:
         name = self.builder.math_renderer_name
         _, depart = self.builder.app.registry.html_block_math_renderers[name]
-        if depart:
+        if depart:  # type: ignore[truthy-function]
             depart(self, node)
-
-    def generate_targets_for_table(self, node: Element) -> None:
-        """Generate hyperlink targets for tables.
-
-        Original visit_table() generates hyperlink targets inside table tags
-        (<table>) if multiple IDs are assigned to listings.
-        That is invalid DOM structure.  (This is a bug of docutils <= 0.13.1)
-
-        This exports hyperlink targets before tables to make valid DOM structure.
-        """
-        warnings.warn('generate_targets_for_table() is deprecated',
-                      RemovedInSphinx60Warning, stacklevel=2)
-        for id in node['ids'][1:]:
-            self.body.append('<span id="%s"></span>' % id)
-            node['ids'].remove(id)
-
-    @property
-    def _fieldlist_row_index(self) -> int:
-        warnings.warn('_fieldlist_row_index is deprecated',
-                      RemovedInSphinx60Warning, stacklevel=2)
-        return self._fieldlist_row_indices[-1]
-
-    @property
-    def _table_row_index(self) -> int:
-        warnings.warn('_table_row_index is deprecated',
-                      RemovedInSphinx60Warning, stacklevel=2)
-        return self._table_row_indices[-1]

@@ -1,7 +1,6 @@
 """Tests the Python Domain"""
 
 import re
-import sys
 from unittest.mock import Mock
 
 import docutils.utils
@@ -9,15 +8,34 @@ import pytest
 from docutils import nodes
 
 from sphinx import addnodes
-from sphinx.addnodes import (desc, desc_addname, desc_annotation, desc_content, desc_name,
-                             desc_optional, desc_parameter, desc_parameterlist, desc_returns,
-                             desc_sig_keyword, desc_sig_literal_number,
-                             desc_sig_literal_string, desc_sig_name, desc_sig_operator,
-                             desc_sig_punctuation, desc_sig_space, desc_signature,
-                             pending_xref)
+from sphinx.addnodes import (
+    desc,
+    desc_addname,
+    desc_annotation,
+    desc_content,
+    desc_name,
+    desc_optional,
+    desc_parameter,
+    desc_parameterlist,
+    desc_returns,
+    desc_sig_keyword,
+    desc_sig_literal_number,
+    desc_sig_literal_string,
+    desc_sig_name,
+    desc_sig_operator,
+    desc_sig_punctuation,
+    desc_sig_space,
+    desc_signature,
+    pending_xref,
+)
 from sphinx.domains import IndexEntry
-from sphinx.domains.python import (PythonDomain, PythonModuleIndex, _parse_annotation,
-                                   _pseudo_parse_arglist, py_sig_re)
+from sphinx.domains.python import (
+    PythonDomain,
+    PythonModuleIndex,
+    _parse_annotation,
+    _pseudo_parse_arglist,
+    py_sig_re,
+)
 from sphinx.testing import restructuredtext
 from sphinx.testing.util import assert_node
 
@@ -365,7 +383,6 @@ def test_parse_annotation_suppress(app):
     assert_node(doctree[0], pending_xref, refdomain="py", reftype="obj", reftarget="typing.Dict")
 
 
-@pytest.mark.skipif(sys.version_info < (3, 8), reason='python 3.8+ is required.')
 def test_parse_annotation_Literal(app):
     doctree = _parse_annotation("Literal[True, False]", app.env)
     assert_node(doctree, ([pending_xref, "Literal"],
@@ -451,37 +468,6 @@ def test_pyfunction_signature_full(app):
                                                         [desc_sig_punctuation, ":"],
                                                         desc_sig_space,
                                                         [desc_sig_name, pending_xref, "str"])])])
-
-
-def test_pyfunction_with_unary_operators(app):
-    text = ".. py:function:: menu(egg=+1, bacon=-1, sausage=~1, spam=not spam)"
-    doctree = restructuredtext.parse(app, text)
-    assert_node(doctree[1][0][1],
-                [desc_parameterlist, ([desc_parameter, ([desc_sig_name, "egg"],
-                                                        [desc_sig_operator, "="],
-                                                        [nodes.inline, "+1"])],
-                                      [desc_parameter, ([desc_sig_name, "bacon"],
-                                                        [desc_sig_operator, "="],
-                                                        [nodes.inline, "-1"])],
-                                      [desc_parameter, ([desc_sig_name, "sausage"],
-                                                        [desc_sig_operator, "="],
-                                                        [nodes.inline, "~1"])],
-                                      [desc_parameter, ([desc_sig_name, "spam"],
-                                                        [desc_sig_operator, "="],
-                                                        [nodes.inline, "not spam"])])])
-
-
-def test_pyfunction_with_binary_operators(app):
-    text = ".. py:function:: menu(spam=2**64)"
-    doctree = restructuredtext.parse(app, text)
-    assert_node(doctree[1][0][1],
-                [desc_parameterlist, ([desc_parameter, ([desc_sig_name, "spam"],
-                                                        [desc_sig_operator, "="],
-                                                        [nodes.inline, "2**64"])])])
-
-
-@pytest.mark.skipif(sys.version_info < (3, 8), reason='python 3.8+ is required.')
-def test_pyfunction_signature_full_py38(app):
     # case: separator at head
     text = ".. py:function:: hello(*, a)"
     doctree = restructuredtext.parse(app, text)
@@ -516,7 +502,33 @@ def test_pyfunction_signature_full_py38(app):
                                       [desc_parameter, desc_sig_operator, "/"])])
 
 
-@pytest.mark.skipif(sys.version_info < (3, 8), reason='python 3.8+ is required.')
+def test_pyfunction_with_unary_operators(app):
+    text = ".. py:function:: menu(egg=+1, bacon=-1, sausage=~1, spam=not spam)"
+    doctree = restructuredtext.parse(app, text)
+    assert_node(doctree[1][0][1],
+                [desc_parameterlist, ([desc_parameter, ([desc_sig_name, "egg"],
+                                                        [desc_sig_operator, "="],
+                                                        [nodes.inline, "+1"])],
+                                      [desc_parameter, ([desc_sig_name, "bacon"],
+                                                        [desc_sig_operator, "="],
+                                                        [nodes.inline, "-1"])],
+                                      [desc_parameter, ([desc_sig_name, "sausage"],
+                                                        [desc_sig_operator, "="],
+                                                        [nodes.inline, "~1"])],
+                                      [desc_parameter, ([desc_sig_name, "spam"],
+                                                        [desc_sig_operator, "="],
+                                                        [nodes.inline, "not spam"])])])
+
+
+def test_pyfunction_with_binary_operators(app):
+    text = ".. py:function:: menu(spam=2**64)"
+    doctree = restructuredtext.parse(app, text)
+    assert_node(doctree[1][0][1],
+                [desc_parameterlist, ([desc_parameter, ([desc_sig_name, "spam"],
+                                                        [desc_sig_operator, "="],
+                                                        [nodes.inline, "2**64"])])])
+
+
 def test_pyfunction_with_number_literals(app):
     text = ".. py:function:: hello(age=0x10, height=1_6_0)"
     doctree = restructuredtext.parse(app, text)
@@ -585,7 +597,7 @@ def test_pydata_signature(app):
                                                         desc_sig_space,
                                                         [desc_sig_punctuation, '='],
                                                         desc_sig_space,
-                                                        "1")]
+                                                        "1")],
                                                     )],
                                   desc_content)]))
     assert_node(doctree[1], addnodes.desc, desctype="data",
@@ -732,10 +744,8 @@ def test_pymethod_options(app):
             "   .. py:method:: meth4\n"
             "      :async:\n"
             "   .. py:method:: meth5\n"
-            "      :property:\n"
-            "   .. py:method:: meth6\n"
             "      :abstractmethod:\n"
-            "   .. py:method:: meth7\n"
+            "   .. py:method:: meth6\n"
             "      :final:\n")
     domain = app.env.get_domain('py')
     doctree = restructuredtext.parse(app, text)
@@ -743,8 +753,6 @@ def test_pymethod_options(app):
                           [desc, ([desc_signature, ([desc_annotation, ("class", desc_sig_space)],
                                                     [desc_name, "Class"])],
                                   [desc_content, (addnodes.index,
-                                                  desc,
-                                                  addnodes.index,
                                                   desc,
                                                   addnodes.index,
                                                   desc,
@@ -796,34 +804,25 @@ def test_pymethod_options(app):
     assert 'Class.meth4' in domain.objects
     assert domain.objects['Class.meth4'] == ('index', 'Class.meth4', 'method', False)
 
-    # :property:
+    # :abstractmethod:
     assert_node(doctree[1][1][8], addnodes.index,
-                entries=[('single', 'meth5 (Class property)', 'Class.meth5', '', None)])
-    assert_node(doctree[1][1][9], ([desc_signature, ([desc_annotation, ("property", desc_sig_space)],
-                                                     [desc_name, "meth5"])],
+                entries=[('single', 'meth5() (Class method)', 'Class.meth5', '', None)])
+    assert_node(doctree[1][1][9], ([desc_signature, ([desc_annotation, ("abstract", desc_sig_space)],
+                                                     [desc_name, "meth5"],
+                                                     [desc_parameterlist, ()])],
                                    [desc_content, ()]))
     assert 'Class.meth5' in domain.objects
     assert domain.objects['Class.meth5'] == ('index', 'Class.meth5', 'method', False)
 
-    # :abstractmethod:
+    # :final:
     assert_node(doctree[1][1][10], addnodes.index,
                 entries=[('single', 'meth6() (Class method)', 'Class.meth6', '', None)])
-    assert_node(doctree[1][1][11], ([desc_signature, ([desc_annotation, ("abstract", desc_sig_space)],
+    assert_node(doctree[1][1][11], ([desc_signature, ([desc_annotation, ("final", desc_sig_space)],
                                                       [desc_name, "meth6"],
                                                       [desc_parameterlist, ()])],
                                     [desc_content, ()]))
     assert 'Class.meth6' in domain.objects
     assert domain.objects['Class.meth6'] == ('index', 'Class.meth6', 'method', False)
-
-    # :final:
-    assert_node(doctree[1][1][12], addnodes.index,
-                entries=[('single', 'meth7() (Class method)', 'Class.meth7', '', None)])
-    assert_node(doctree[1][1][13], ([desc_signature, ([desc_annotation, ("final", desc_sig_space)],
-                                                      [desc_name, "meth7"],
-                                                      [desc_parameterlist, ()])],
-                                    [desc_content, ()]))
-    assert 'Class.meth7' in domain.objects
-    assert domain.objects['Class.meth7'] == ('index', 'Class.meth7', 'method', False)
 
 
 def test_pyclassmethod(app):
@@ -886,18 +885,19 @@ def test_pyattribute(app):
     assert_node(doctree[1][1][1], ([desc_signature, ([desc_name, "attr"],
                                                      [desc_annotation, ([desc_sig_punctuation, ':'],
                                                                         desc_sig_space,
-                                                                        [pending_xref, "Optional"],
-                                                                        [desc_sig_punctuation, "["],
                                                                         [pending_xref, "str"],
-                                                                        [desc_sig_punctuation, "]"])],
+                                                                        desc_sig_space,
+                                                                        [desc_sig_punctuation, "|"],
+                                                                        desc_sig_space,
+                                                                        [pending_xref, "None"])],
                                                      [desc_annotation, (desc_sig_space,
                                                                         [desc_sig_punctuation, '='],
                                                                         desc_sig_space,
-                                                                        "''")]
+                                                                        "''")],
                                                      )],
                                    [desc_content, ()]))
     assert_node(doctree[1][1][1][0][1][2], pending_xref, **{"py:class": "Class"})
-    assert_node(doctree[1][1][1][0][1][4], pending_xref, **{"py:class": "Class"})
+    assert_node(doctree[1][1][1][0][1][6], pending_xref, **{"py:class": "Class"})
     assert 'Class.attr' in domain.objects
     assert domain.objects['Class.attr'] == ('index', 'Class.attr', 'attribute', False)
 
@@ -1346,7 +1346,7 @@ def test_module_index(app):
                 IndexEntry('sphinx.builders.html', 2, 'index', 'module-sphinx.builders.html', '', '', ''),
                 IndexEntry('sphinx.config', 2, 'index', 'module-sphinx.config', '', '', ''),
                 IndexEntry('sphinx_intl', 0, 'index', 'module-sphinx_intl', '', '', '')])],
-        False
+        False,
     )
 
 
@@ -1358,7 +1358,7 @@ def test_module_index_submodule(app):
     assert index.generate() == (
         [('s', [IndexEntry('sphinx', 1, '', '', '', '', ''),
                 IndexEntry('sphinx.config', 2, 'index', 'module-sphinx.config', '', '', '')])],
-        False
+        False,
     )
 
 
@@ -1371,7 +1371,7 @@ def test_module_index_not_collapsed(app):
     assert index.generate() == (
         [('d', [IndexEntry('docutils', 0, 'index', 'module-docutils', '', '', '')]),
          ('s', [IndexEntry('sphinx', 0, 'index', 'module-sphinx', '', '', '')])],
-        True
+        True,
     )
 
 
@@ -1392,7 +1392,7 @@ def test_modindex_common_prefix(app):
          ('d', [IndexEntry('docutils', 0, 'index', 'module-docutils', '', '', '')]),
          ('s', [IndexEntry('sphinx', 0, 'index', 'module-sphinx', '', '', ''),
                 IndexEntry('sphinx_intl', 0, 'index', 'module-sphinx_intl', '', '', '')])],
-        True
+        True,
     )
 
 
@@ -1458,3 +1458,82 @@ def test_signature_line_number(app, include_options):
     source, line = docutils.utils.get_source_line(xrefs[0])
     assert 'index.rst' in source
     assert line == 1
+
+
+def test_module_content_line_number(app):
+    text = (".. py:module:: foo\n" +
+            "\n" +
+            "   Some link here: :ref:`abc`\n")
+    doc = restructuredtext.parse(app, text)
+    xrefs = list(doc.findall(condition=addnodes.pending_xref))
+    assert len(xrefs) == 1
+    source, line = docutils.utils.get_source_line(xrefs[0])
+    assert 'index.rst' in source
+    assert line == 3
+
+
+@pytest.mark.sphinx(freshenv=True, confoverrides={'python_display_short_literal_types': True})
+def test_short_literal_types(app):
+    text = """\
+.. py:function:: literal_ints(x: Literal[1, 2, 3] = 1) -> None
+.. py:function:: literal_union(x: Union[Literal["a"], Literal["b"], Literal["c"]]) -> None
+"""
+    doctree = restructuredtext.parse(app, text)
+    assert_node(doctree, (
+        addnodes.index,
+        [desc, (
+            [desc_signature, (
+                [desc_name, 'literal_ints'],
+                [desc_parameterlist, (
+                    [desc_parameter, (
+                        [desc_sig_name, 'x'],
+                        [desc_sig_punctuation, ':'],
+                        desc_sig_space,
+                        [desc_sig_name, (
+                            [desc_sig_literal_number, '1'],
+                            desc_sig_space,
+                            [desc_sig_punctuation, '|'],
+                            desc_sig_space,
+                            [desc_sig_literal_number, '2'],
+                            desc_sig_space,
+                            [desc_sig_punctuation, '|'],
+                            desc_sig_space,
+                            [desc_sig_literal_number, '3'],
+                        )],
+                        desc_sig_space,
+                        [desc_sig_operator, '='],
+                        desc_sig_space,
+                        [nodes.inline, '1'],
+                    )],
+                )],
+                [desc_returns, pending_xref, 'None'],
+            )],
+            [desc_content, ()],
+        )],
+        addnodes.index,
+        [desc, (
+            [desc_signature, (
+                [desc_name, 'literal_union'],
+                [desc_parameterlist, (
+                    [desc_parameter, (
+                        [desc_sig_name, 'x'],
+                        [desc_sig_punctuation, ':'],
+                        desc_sig_space,
+                        [desc_sig_name, (
+                            [desc_sig_literal_string, "'a'"],
+                            desc_sig_space,
+                            [desc_sig_punctuation, '|'],
+                            desc_sig_space,
+                            [desc_sig_literal_string, "'b'"],
+                            desc_sig_space,
+                            [desc_sig_punctuation, '|'],
+                            desc_sig_space,
+                            [desc_sig_literal_string, "'c'"],
+                        )],
+                    )],
+                )],
+                [desc_returns, pending_xref, 'None'],
+            )],
+            [desc_content, ()],
+        )],
+    ))

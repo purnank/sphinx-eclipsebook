@@ -1,5 +1,7 @@
 """Tests util.inspect functions."""
 
+from __future__ import annotations
+
 import ast
 import datetime
 import enum
@@ -13,15 +15,15 @@ import pytest
 
 from sphinx.util import inspect
 from sphinx.util.inspect import TypeAliasForwardRef, TypeAliasNamespace, stringify_signature
-from sphinx.util.typing import stringify
+from sphinx.util.typing import stringify_annotation
 
 
 def test_TypeAliasForwardRef():
     alias = TypeAliasForwardRef('example')
-    assert stringify(alias) == 'example'
+    assert stringify_annotation(alias, 'fully-qualified-except-typing') == 'example'
 
     alias = Optional[alias]
-    assert stringify(alias) == 'Optional[example]'
+    assert stringify_annotation(alias, 'fully-qualified-except-typing') == 'example | None'
 
 
 def test_TypeAliasNamespace():
@@ -150,8 +152,35 @@ def test_signature_partialmethod():
 
 
 def test_signature_annotations():
-    from .typing_test_data import (Node, f0, f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12,
-                                   f13, f14, f15, f16, f17, f18, f19, f20, f21)
+    from .typing_test_data import (
+        Node,
+        f0,
+        f1,
+        f2,
+        f3,
+        f4,
+        f5,
+        f6,
+        f7,
+        f8,
+        f9,
+        f10,
+        f11,
+        f12,
+        f13,
+        f14,
+        f15,
+        f16,
+        f17,
+        f18,
+        f19,
+        f20,
+        f21,
+        f22,
+        f23,
+        f24,
+        f25,
+    )
 
     # Class annotations
     sig = inspect.signature(f0)
@@ -163,20 +192,14 @@ def test_signature_annotations():
 
     # TypeVars and generic types with TypeVars
     sig = inspect.signature(f2)
-    if sys.version_info < (3, 7):
-        assert stringify_signature(sig) == ('(x: typing.List[typing.T],'
-                                            ' y: typing.List[typing.T_co],'
-                                            ' z: typing.T'
-                                            ') -> typing.List[typing.T_contra]')
-    else:
-        assert stringify_signature(sig) == ('(x: typing.List[tests.typing_test_data.T],'
-                                            ' y: typing.List[tests.typing_test_data.T_co],'
-                                            ' z: tests.typing_test_data.T'
-                                            ') -> typing.List[tests.typing_test_data.T_contra]')
+    assert stringify_signature(sig) == ('(x: typing.List[tests.typing_test_data.T],'
+                                        ' y: typing.List[tests.typing_test_data.T_co],'
+                                        ' z: tests.typing_test_data.T'
+                                        ') -> typing.List[tests.typing_test_data.T_contra]')
 
     # Union types
     sig = inspect.signature(f3)
-    assert stringify_signature(sig) == '(x: typing.Union[str, numbers.Integral]) -> None'
+    assert stringify_signature(sig) == '(x: str | numbers.Integral) -> None'
 
     # Quoted annotations
     sig = inspect.signature(f4)
@@ -192,8 +215,8 @@ def test_signature_annotations():
 
     # Space around '=' for defaults
     sig = inspect.signature(f7)
-    if sys.version_info < (3, 11):
-        assert stringify_signature(sig) == '(x: typing.Optional[int] = None, y: dict = {}) -> None'
+    if sys.version_info[:2] <= (3, 10):
+        assert stringify_signature(sig) == '(x: int | None = None, y: dict = {}) -> None'
     else:
         assert stringify_signature(sig) == '(x: int = None, y: dict = {}) -> None'
 
@@ -218,12 +241,12 @@ def test_signature_annotations():
 
     # optional
     sig = inspect.signature(f13)
-    assert stringify_signature(sig) == '() -> typing.Optional[str]'
+    assert stringify_signature(sig) == '() -> str | None'
 
     # optional union
     sig = inspect.signature(f20)
-    assert stringify_signature(sig) in ('() -> typing.Optional[typing.Union[int, str]]',
-                                        '() -> typing.Optional[typing.Union[str, int]]')
+    assert stringify_signature(sig) in ('() -> int | str | None',
+                                        '() -> str | int | None')
 
     # Any
     sig = inspect.signature(f14)
@@ -242,7 +265,7 @@ def test_signature_annotations():
     assert stringify_signature(sig) == '(*, arg3, arg4)'
 
     sig = inspect.signature(f18)
-    assert stringify_signature(sig) == ('(self, arg1: typing.Union[int, typing.Tuple] = 10) -> '
+    assert stringify_signature(sig) == ('(self, arg1: int | typing.Tuple = 10) -> '
                                         'typing.List[typing.Dict]')
 
     # annotations for variadic and keyword parameters
@@ -258,7 +281,7 @@ def test_signature_annotations():
     assert stringify_signature(sig) == '(self) -> typing.List[tests.typing_test_data.Node]'
 
     sig = inspect.signature(Node.__init__)
-    assert stringify_signature(sig) == '(self, parent: typing.Optional[tests.typing_test_data.Node]) -> None'
+    assert stringify_signature(sig) == '(self, parent: tests.typing_test_data.Node | None) -> None'
 
     # show_annotation is False
     sig = inspect.signature(f7)
@@ -266,37 +289,31 @@ def test_signature_annotations():
 
     # show_return_annotation is False
     sig = inspect.signature(f7)
-    if sys.version_info < (3, 11):
-        assert stringify_signature(sig, show_return_annotation=False) == '(x: typing.Optional[int] = None, y: dict = {})'
+    if sys.version_info[:2] <= (3, 10):
+        assert stringify_signature(sig, show_return_annotation=False) == '(x: int | None = None, y: dict = {})'
     else:
         assert stringify_signature(sig, show_return_annotation=False) == '(x: int = None, y: dict = {})'
 
     # unqualified_typehints is True
     sig = inspect.signature(f7)
-    if sys.version_info < (3, 11):
-        assert stringify_signature(sig, unqualified_typehints=True) == '(x: ~typing.Optional[int] = None, y: dict = {}) -> None'
+    if sys.version_info[:2] <= (3, 10):
+        assert stringify_signature(sig, unqualified_typehints=True) == '(x: int | None = None, y: dict = {}) -> None'
     else:
         assert stringify_signature(sig, unqualified_typehints=True) == '(x: int = None, y: dict = {}) -> None'
 
-
-@pytest.mark.skipif(sys.version_info < (3, 8), reason='python 3.8+ is required.')
-@pytest.mark.sphinx(testroot='ext-autodoc')
-def test_signature_annotations_py38(app):
-    from target.pep570 import bar, baz, foo, qux
-
     # case: separator at head
-    sig = inspect.signature(foo)
+    sig = inspect.signature(f22)
     assert stringify_signature(sig) == '(*, a, b)'
 
     # case: separator in the middle
-    sig = inspect.signature(bar)
+    sig = inspect.signature(f23)
     assert stringify_signature(sig) == '(a, b, /, c, d)'
 
-    sig = inspect.signature(baz)
+    sig = inspect.signature(f24)
     assert stringify_signature(sig) == '(a, /, *, b)'
 
     # case: separator at tail
-    sig = inspect.signature(qux)
+    sig = inspect.signature(f25)
     assert stringify_signature(sig) == '(a, b, /)'
 
 
@@ -379,8 +396,6 @@ def test_signature_from_str_kwonly_args():
     assert sig.parameters['b'].default == Parameter.empty
 
 
-@pytest.mark.skipif(sys.version_info < (3, 8),
-                    reason='python-3.8 or above is required')
 def test_signature_from_str_positionaly_only_args():
     sig = inspect.signature_from_str('(a, b=0, /, c=1)')
     assert list(sig.parameters.keys()) == ['a', 'b', 'c']
@@ -448,12 +463,8 @@ def test_safe_getattr_with_exception():
 
     obj = Foo()
 
-    try:
+    with pytest.raises(AttributeError, match='bar'):
         inspect.safe_getattr(obj, 'bar')
-    except AttributeError as exc:
-        assert exc.args[0] == 'bar'
-    else:
-        pytest.fail('AttributeError not raised')
 
 
 def test_safe_getattr_with_property_exception():
@@ -464,12 +475,8 @@ def test_safe_getattr_with_property_exception():
 
     obj = Foo()
 
-    try:
+    with pytest.raises(AttributeError, match='bar'):
         inspect.safe_getattr(obj, 'bar')
-    except AttributeError as exc:
-        assert exc.args[0] == 'bar'
-    else:
-        pytest.fail('AttributeError not raised')
 
 
 def test_safe_getattr_with___dict___override():
@@ -480,12 +487,8 @@ def test_safe_getattr_with___dict___override():
 
     obj = Foo()
 
-    try:
+    with pytest.raises(AttributeError, match='bar'):
         inspect.safe_getattr(obj, 'bar')
-    except AttributeError as exc:
-        assert exc.args[0] == 'bar'
-    else:
-        pytest.fail('AttributeError not raised')
 
 
 def test_dictionary_sorting():
@@ -667,6 +670,7 @@ def test_isattributedescriptor(app):
         pass
 
 
+@pytest.mark.sphinx(testroot='ext-autodoc')
 def test_isproperty(app):
     from target.functions import func
     from target.methods import Base
@@ -678,7 +682,6 @@ def test_isproperty(app):
     assert inspect.isproperty(func) is False            # function
 
 
-@pytest.mark.skipif(sys.version_info < (3, 7), reason='python 3.7+ is required.')
 @pytest.mark.sphinx(testroot='ext-autodoc')
 def test_isgenericalias(app):
     from target.genericalias import C, T
@@ -730,7 +733,7 @@ def test_getdoc_inherited_decorated_method():
             """
 
     class Bar(Foo):
-        @functools.lru_cache()  # noqa: B019
+        @functools.lru_cache  # noqa: B019
         def meth(self):
             # inherited and decorated method
             pass

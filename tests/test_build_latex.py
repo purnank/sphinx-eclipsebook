@@ -4,22 +4,30 @@ import os
 import re
 import subprocess
 from itertools import product
+from pathlib import Path
 from shutil import copyfile
-from subprocess import PIPE, CalledProcessError
+from subprocess import CalledProcessError
 
 import pytest
 
 from sphinx.builders.latex import default_latex_documents
 from sphinx.config import Config
 from sphinx.errors import SphinxError
+from sphinx.ext.intersphinx import load_mappings, normalize_intersphinx_mapping
+from sphinx.ext.intersphinx import setup as intersphinx_setup
 from sphinx.testing.util import strip_escseq
-from sphinx.util.osutil import cd, ensuredir
+from sphinx.util.osutil import ensuredir
 from sphinx.writers.latex import LaTeXTranslator
 
 from .test_build_html import ENV_WARNINGS
 
+try:
+    from contextlib import chdir
+except ImportError:
+    from sphinx.util.osutil import _chdir as chdir
+
 LATEX_ENGINES = ['pdflatex', 'lualatex', 'xelatex']
-DOCCLASSES = ['howto', 'manual']
+DOCCLASSES = ['manual', 'howto']
 STYLEFILES = ['article.cls', 'fancyhdr.sty', 'titlesec.sty', 'amsmath.sty',
               'framed.sty', 'color.sty', 'fancyvrb.sty',
               'fncychap.sty', 'geometry.sty', 'kvoptions.sty', 'hyperref.sty',
@@ -29,40 +37,43 @@ LATEX_WARNINGS = ENV_WARNINGS + """\
 %(root)s/index.rst:\\d+: WARNING: unknown option: '&option'
 %(root)s/index.rst:\\d+: WARNING: citation not found: missing
 %(root)s/index.rst:\\d+: WARNING: a suitable image for latex builder not found: foo.\\*
-%(root)s/index.rst:\\d+: WARNING: Could not lex literal_block as "c". Highlighting skipped.
+%(root)s/index.rst:\\d+: WARNING: Could not lex literal_block .* as "c". Highlighting skipped.
 """
 
 
 # only run latex if all needed packages are there
 def kpsetest(*filenames):
     try:
-        subprocess.run(['kpsewhich'] + list(filenames), stdout=PIPE, stderr=PIPE, check=True)
+        subprocess.run(['kpsewhich'] + list(filenames), capture_output=True, check=True)
         return True
     except (OSError, CalledProcessError):
         return False  # command not found or exit with non-zero
 
 
 # compile latex document with app.config.latex_engine
-def compile_latex_document(app, filename='python.tex'):
+def compile_latex_document(app, filename='python.tex', docclass='manual'):
     # now, try to run latex over it
     try:
-        with cd(app.outdir):
-            ensuredir(app.config.latex_engine)
+        with chdir(app.outdir):
+            # name latex output-directory according to both engine and docclass
+            # to avoid reuse of auxiliary files by one docclass from another
+            latex_outputdir = app.config.latex_engine + docclass
+            ensuredir(latex_outputdir)
             # keep a copy of latex file for this engine in case test fails
-            copyfile(filename, app.config.latex_engine + '/' + filename)
+            copyfile(filename, latex_outputdir + '/' + filename)
             args = [app.config.latex_engine,
                     '--halt-on-error',
                     '--interaction=nonstopmode',
-                    '-output-directory=%s' % app.config.latex_engine,
+                    '-output-directory=%s' % latex_outputdir,
                     filename]
-            subprocess.run(args, stdout=PIPE, stderr=PIPE, check=True)
+            subprocess.run(args, capture_output=True, check=True)
     except OSError as exc:  # most likely the latex executable was not found
         raise pytest.skip.Exception from exc
     except CalledProcessError as exc:
         print(exc.stdout.decode('utf8'))
         print(exc.stderr.decode('utf8'))
-        raise AssertionError('%s exited with return code %s' % (app.config.latex_engine,
-                                                                exc.returncode))
+        raise AssertionError(f'{app.config.latex_engine} exited with '
+                             f'return code {exc.returncode}')
 
 
 def skip_if_requested(testfunc):
@@ -89,12 +100,18 @@ def skip_if_stylefiles_notfound(testfunc):
 )
 @pytest.mark.sphinx('latex')
 def test_build_latex_doc(app, status, warning, engine, docclass):
+    app.config.intersphinx_mapping = {
+        'sphinx': ('https://www.sphinx-doc.org/en/master/', None),
+    }
+    intersphinx_setup(app)
     app.config.latex_engine = engine
     app.config.latex_documents = [app.config.latex_documents[0][:4] + (docclass,)]
     if engine == 'xelatex':
         app.config.latex_table_style = ['booktabs']
     elif engine == 'lualatex':
         app.config.latex_table_style = ['colorrows']
+    normalize_intersphinx_mapping(app, app.config)
+    load_mappings(app)
     app.builder.init()
 
     LaTeXTranslator.ignore_missing_images = True
@@ -103,7 +120,7 @@ def test_build_latex_doc(app, status, warning, engine, docclass):
     # file from latex_additional_files
     assert (app.outdir / 'svgimg.svg').isfile()
 
-    compile_latex_document(app, 'sphinxtests.tex')
+    compile_latex_document(app, 'sphinxtests.tex', docclass)
 
 
 @pytest.mark.sphinx('latex')
@@ -119,21 +136,35 @@ def test_writer(app, status, warning):
     assert ('\\begin{wrapfigure}{r}{0pt}\n\\centering\n'
             '\\noindent\\sphinxincludegraphics{{rimg}.png}\n'
             '\\caption{figure with align option}\\label{\\detokenize{markup:id9}}'
-            '\\end{wrapfigure}' in result)
+            '\\end{wrapfigure}\n\n'
+            '\\mbox{}\\par\\vskip-\\dimexpr\\baselineskip+\\parskip\\relax' in result)
 
     assert ('\\begin{wrapfigure}{r}{0.500\\linewidth}\n\\centering\n'
             '\\noindent\\sphinxincludegraphics{{rimg}.png}\n'
             '\\caption{figure with align \\& figwidth option}'
             '\\label{\\detokenize{markup:id10}}'
-            '\\end{wrapfigure}' in result)
+            '\\end{wrapfigure}\n\n'
+            '\\mbox{}\\par\\vskip-\\dimexpr\\baselineskip+\\parskip\\relax' in result)
 
     assert ('\\begin{wrapfigure}{r}{3cm}\n\\centering\n'
             '\\noindent\\sphinxincludegraphics[width=3cm]{{rimg}.png}\n'
             '\\caption{figure with align \\& width option}'
             '\\label{\\detokenize{markup:id11}}'
-            '\\end{wrapfigure}' in result)
+            '\\end{wrapfigure}\n\n'
+            '\\mbox{}\\par\\vskip-\\dimexpr\\baselineskip+\\parskip\\relax' in result)
 
     assert 'Footnotes' not in result
+
+    assert ('\\begin{sphinxseealso}{See also:}\n\n'
+            '\\sphinxAtStartPar\n'
+            'something, something else, something more\n'
+            '\\begin{description}\n'
+            '\\sphinxlineitem{\\sphinxhref{http://www.google.com}{Google}}\n'
+            '\\sphinxAtStartPar\n'
+            'For everything.\n'
+            '\n'
+            '\\end{description}\n'
+            '\n\n\\end{sphinxseealso}\n\n' in result)
 
 
 @pytest.mark.sphinx('latex', testroot='warnings', freshenv=True)
@@ -144,7 +175,7 @@ def test_latex_warnings(app, status, warning):
     warnings_exp = LATEX_WARNINGS % {
         'root': re.escape(app.srcdir.replace(os.sep, '/'))}
     assert re.match(warnings_exp + '$', warnings), \
-        'Warnings don\'t match:\n' + \
+        "Warnings don't match:\n" + \
         '--- Expected (regex):\n' + warnings_exp + \
         '--- Got:\n' + warnings
 
@@ -163,7 +194,7 @@ def test_latex_basic(app, status, warning):
 
 @pytest.mark.sphinx('latex', testroot='basic',
                     confoverrides={
-                        'latex_documents': [('index', 'test.tex', 'title', 'author', 'manual')]
+                        'latex_documents': [('index', 'test.tex', 'title', 'author', 'manual')],
                     })
 def test_latex_basic_manual(app, status, warning):
     app.builder.build_all()
@@ -175,7 +206,7 @@ def test_latex_basic_manual(app, status, warning):
 
 @pytest.mark.sphinx('latex', testroot='basic',
                     confoverrides={
-                        'latex_documents': [('index', 'test.tex', 'title', 'author', 'howto')]
+                        'latex_documents': [('index', 'test.tex', 'title', 'author', 'howto')],
                     })
 def test_latex_basic_howto(app, status, warning):
     app.builder.build_all()
@@ -188,7 +219,7 @@ def test_latex_basic_howto(app, status, warning):
 @pytest.mark.sphinx('latex', testroot='basic',
                     confoverrides={
                         'language': 'ja',
-                        'latex_documents': [('index', 'test.tex', 'title', 'author', 'manual')]
+                        'latex_documents': [('index', 'test.tex', 'title', 'author', 'manual')],
                     })
 def test_latex_basic_manual_ja(app, status, warning):
     app.builder.build_all()
@@ -201,7 +232,7 @@ def test_latex_basic_manual_ja(app, status, warning):
 @pytest.mark.sphinx('latex', testroot='basic',
                     confoverrides={
                         'language': 'ja',
-                        'latex_documents': [('index', 'test.tex', 'title', 'author', 'howto')]
+                        'latex_documents': [('index', 'test.tex', 'title', 'author', 'howto')],
                     })
 def test_latex_basic_howto_ja(app, status, warning):
     app.builder.build_all()
@@ -418,7 +449,7 @@ def test_numref_with_prefix2(app, status, warning):
     'latex', testroot='numfig',
     confoverrides={'numfig': True, 'language': 'ja'})
 def test_numref_with_language_ja(app, status, warning):
-    app.builder.build_all()
+    app.build()
     result = (app.outdir / 'python.tex').read_text(encoding='utf8')
     print(result)
     print(status.getvalue())
@@ -842,7 +873,7 @@ def test_latex_show_urls_is_inline(app, status, warning):
             '(http://sphinx\\sphinxhyphen{}doc.org/)}\n'
             '\\sphinxAtStartPar\nDescription' in result)
     assert ('\\sphinxlineitem{Footnote in term \\sphinxfootnotemark[7]}%\n'
-            '\\begin{footnotetext}[7]\\sphinxAtStartFootnote\n')
+            '\\begin{footnotetext}[7]\\sphinxAtStartFootnote\n' in result)
     assert ('\\sphinxlineitem{\\sphinxhref{http://sphinx-doc.org/}{URL in term} '
             '(http://sphinx\\sphinxhyphen{}doc.org/)}\n'
             '\\sphinxAtStartPar\nDescription' in result)
@@ -997,11 +1028,8 @@ def test_image_in_section(app, status, warning):
 @pytest.mark.sphinx('latex', testroot='basic',
                     confoverrides={'latex_logo': 'notfound.jpg'})
 def test_latex_logo_if_not_found(app, status, warning):
-    try:
+    with pytest.raises(SphinxError):
         app.builder.build_all()
-        raise AssertionError()  # SphinxError not raised
-    except Exception as exc:
-        assert isinstance(exc, SphinxError)
 
 
 @pytest.mark.sphinx('latex', testroot='toctree-maxdepth')
@@ -1104,7 +1132,7 @@ def test_latex_toplevel_sectioning_is_part(app, status, warning):
     confoverrides={'latex_toplevel_sectioning': 'part',
                    'latex_documents': [
                        ('index', 'python.tex', 'Sphinx Tests Documentation',
-                        'Georg Brandl', 'howto')
+                        'Georg Brandl', 'howto'),
                    ]})
 def test_latex_toplevel_sectioning_is_part_with_howto(app, status, warning):
     app.builder.build_all()
@@ -1134,7 +1162,7 @@ def test_latex_toplevel_sectioning_is_chapter(app, status, warning):
     confoverrides={'latex_toplevel_sectioning': 'chapter',
                    'latex_documents': [
                        ('index', 'python.tex', 'Sphinx Tests Documentation',
-                        'Georg Brandl', 'howto')
+                        'Georg Brandl', 'howto'),
                    ]})
 def test_latex_toplevel_sectioning_is_chapter_with_howto(app, status, warning):
     app.builder.build_all()
@@ -1168,7 +1196,8 @@ def test_maxlistdepth_at_ten(app, status, warning):
     compile_latex_document(app, 'python.tex')
 
 
-@pytest.mark.sphinx('latex', testroot='latex-table')
+@pytest.mark.sphinx('latex', testroot='latex-table',
+                    confoverrides={'latex_table_style': []})
 @pytest.mark.test_params(shared_result='latex-table')
 def test_latex_table_tabulars(app, status, warning):
     app.builder.build_all()
@@ -1238,7 +1267,8 @@ def test_latex_table_tabulars(app, status, warning):
     assert actual == expected
 
 
-@pytest.mark.sphinx('latex', testroot='latex-table')
+@pytest.mark.sphinx('latex', testroot='latex-table',
+                    confoverrides={'latex_table_style': []})
 @pytest.mark.test_params(shared_result='latex-table')
 def test_latex_table_longtable(app, status, warning):
     app.builder.build_all()
@@ -1298,7 +1328,8 @@ def test_latex_table_longtable(app, status, warning):
     assert actual == expected
 
 
-@pytest.mark.sphinx('latex', testroot='latex-table')
+@pytest.mark.sphinx('latex', testroot='latex-table',
+                    confoverrides={'latex_table_style': []})
 @pytest.mark.test_params(shared_result='latex-table')
 def test_latex_table_complex_tables(app, status, warning):
     app.builder.build_all()
@@ -1329,18 +1360,17 @@ def test_latex_table_complex_tables(app, status, warning):
     assert actual == expected
 
 
-@pytest.mark.sphinx('latex', testroot='latex-table',
-                    confoverrides={'latex_table_style': ['booktabs', 'colorrows']})
+@pytest.mark.sphinx('latex', testroot='latex-table')
 def test_latex_table_with_booktabs_and_colorrows(app, status, warning):
     app.builder.build_all()
     result = (app.outdir / 'python.tex').read_text(encoding='utf8')
     assert r'\PassOptionsToPackage{booktabs}{sphinx}' in result
     assert r'\PassOptionsToPackage{colorrows}{sphinx}' in result
     # tabularcolumns
-    assert r'\begin{longtable}[c]{|c|c|}' in result
+    assert r'\begin{longtable}{|c|c|}' in result
     # class: standard
     assert r'\begin{tabulary}{\linewidth}[t]{|T|T|T|T|T|}' in result
-    assert r'\begin{longtable}[c]{ll}' in result
+    assert r'\begin{longtable}{ll}' in result
     assert r'\begin{tabular}[t]{*{2}{\X{1}{2}}}' in result
     assert r'\begin{tabular}[t]{\X{30}{100}\X{70}{100}}' in result
 
@@ -1621,7 +1651,7 @@ def test_latex_elements_extrapackages(app, status, warning):
 @pytest.mark.sphinx('latex', testroot='nested-tables')
 def test_latex_nested_tables(app, status, warning):
     app.builder.build_all()
-    assert '' == warning.getvalue()
+    assert warning.getvalue() == ''
 
 
 @pytest.mark.sphinx('latex', testroot='latex-container')
@@ -1657,3 +1687,50 @@ def test_latex_code_role(app):
             common_content + '%\n}} code block') in content
     assert (r'\begin{sphinxVerbatim}[commandchars=\\\{\}]' +
             '\n' + common_content + '\n' + r'\end{sphinxVerbatim}') in content
+
+
+@pytest.mark.sphinx('latex', testroot='images')
+def test_copy_images(app, status, warning):
+    app.build()
+
+    test_dir = Path(app.outdir)
+    images = {
+        image.name for image in test_dir.rglob('*')
+        if image.suffix in {'.gif', '.pdf', '.png', '.svg'}
+    }
+    images.discard('python-logo.png')
+    assert images == {
+        'img.pdf',
+        'rimg.png',
+        'testimäge.png',
+    }
+
+
+@pytest.mark.sphinx('latex', testroot='latex-labels-before-module')
+def test_duplicated_labels_before_module(app, status, warning):
+    app.build()
+    content: str = (app.outdir / 'python.tex').read_text()
+
+    def count_label(name):
+        text = r'\phantomsection\label{\detokenize{%s}}' % name
+        return content.count(text)
+
+    pattern = r'\\phantomsection\\label\{\\detokenize\{index:label-(?:auto-)?\d+[a-z]*}}'
+    # labels found in the TeX output
+    output_labels = frozenset(match.group() for match in re.finditer(pattern, content))
+    # labels that have been tested and occurring exactly once in the output
+    tested_labels = set()
+
+    # iterate over the (explicit) labels in the corresponding index.rst
+    for rst_label_name in [
+        'label_1a', 'label_1b', 'label_2', 'label_3',
+        'label_auto_1a', 'label_auto_1b', 'label_auto_2', 'label_auto_3',
+    ]:
+        tex_label_name = 'index:' + rst_label_name.replace('_', '-')
+        tex_label_code = r'\phantomsection\label{\detokenize{%s}}' % tex_label_name
+        assert content.count(tex_label_code) == 1, f'duplicated label: {tex_label_name!r}'
+        tested_labels.add(tex_label_code)
+
+    # ensure that we did not forget any label to check
+    # and if so, report them nicely in case of failure
+    assert sorted(tested_labels) == sorted(output_labels)
