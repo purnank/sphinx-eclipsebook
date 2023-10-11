@@ -209,7 +209,7 @@ def get_verifier(verify, verify_re):
         # interpolation of arrows in menuselection
         'verify',
         ':menuselection:`a --> b`',
-        ('<p><span class="menuselection">a \N{TRIANGULAR BULLET} b</span></p>'),
+        ('<p><span class="menuselection">a \N{RIGHTWARDS ARROW} b</span></p>'),
         '\\sphinxAtStartPar\n\\sphinxmenuselection{a \\(\\rightarrow\\) b}',
     ),
     (

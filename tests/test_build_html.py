@@ -213,7 +213,7 @@ def test_html4_error(make_app, tmp_path):
         (".//li/p/strong", r'^program\\n$'),
         (".//li/p/em", r'^dfn\\n$'),
         (".//li/p/kbd", r'^kbd\\n$'),
-        (".//li/span", u'File \N{RIGHTWARDS ARROW} Close'), #M+
+        (".//li/p/span", u'File \N{RIGHTWARDS ARROW} Close'), #M+
         (".//li/p/code/span[@class='pre']", '^a/$'),
         (".//li/p/code/em/span[@class='pre']", '^varpart$'),
         (".//li/p/code/em/span[@class='pre']", '^i$'),

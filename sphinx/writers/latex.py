@@ -2184,7 +2184,7 @@ class LaTeXTranslator(SphinxTranslator):
         classes = node.get('classes', [])
         if classes in [['menuselection']]:
             self.body.append(r'\sphinxmenuselection{')
-            self.visiting_menuselection = True
+            self.visiting_menuselection = False #True
             self.context.append('}')
         elif classes in [['guilabel']]:
             self.body.append(r'\sphinxguilabel{')
@@ -2270,9 +2270,11 @@ class LaTeXTranslator(SphinxTranslator):
             .replace(r'\textbackslash{}textasciitilde\{\}',r'\textasciitilde{}')\
             .replace(r'\textbackslash{}sphinxhyphen\{\}',r'\sphinxhyphen{}')\
             .replace('\\textbackslash{}\\', '\\')\
-            .replace('\\textbackslash{}textendash\{\}', '\\textendash{}')\
-            .replace(r'\{{[}\}', r'[')\
-            .replace(r'\{{]}\}', r']')\
+            .replace('\\textbackslash{}textendash\\{\\}', '\\textendash{}')\
+            .replace(r'\{{[}\}', r'{[}')\
+            .replace(r'\{{]}\}', r'{]}')
+#            .replace(r'\{{[}\}', r'[')\
+#            .replace(r'\{{]}\}', r']')\
 
 #M-
 
