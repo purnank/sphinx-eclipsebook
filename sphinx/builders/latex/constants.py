@@ -101,7 +101,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     'contentsname':    '',
     'extrapackages':   '',
     'preamble':        '',
-    'preamble2':       '', #M+
+    'preamble2':       '',  # M+
     'title':           '',
     'release':         '',
     'author':          '',

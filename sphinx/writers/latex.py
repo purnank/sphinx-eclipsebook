@@ -298,10 +298,10 @@ class LaTeXTranslator(SphinxTranslator):
         self.body: list[str] = []
         self.theme = theme
 
-#M+
+# M+
         self.visiting_reference = None
         self.visiting_menuselection = False
-#M-
+# M-
         # flags
         self.in_title = 0
         self.in_production_list = 0
@@ -414,20 +414,23 @@ class LaTeXTranslator(SphinxTranslator):
         if self.elements['extraclassoptions']:
             self.elements['classoptions'] += ',' + \
                                              self.elements['extraclassoptions']
-#M+
+# M+
         if self.builder.config.latex_use_varioref:
             self.elements['varioref'] = '\\usepackage{varioref}  %varioref before cleveref'
         else:
             self.elements['varioref'] = ''
         if builder.config.latex_use_cleveref:
-            self.elements['cleveref'] = '\\usepackage{cleveref}  %cleveref should be last. Atleast after hyperref'
+            self.elements['cleveref'] = \
+                '\\usepackage{cleveref}  %cleveref should be last. Atleast after hyperref'
         else:
             self.elements['cleveref'] = ''
         if builder.config.latex_use_minitoc:
-            self.elements['minitoc'] = '\\usepackage{minitoc}  %minitoc should be loaded before loading sphinx(which loads titlesec)\n\\AtBeginDocument{\\dominitoc}'
+            self.elements['minitoc'] = \
+                '\\usepackage{minitoc}  %minitoc should be loaded before loading ' \
+                'sphinx(which loads titlesec)\n\\AtBeginDocument{\\dominitoc}'
         else:
             self.elements['minitoc'] = ''
-#M-
+# M-
 
         self.highlighter = highlighting.PygmentsBridge('latex', self.config.pygments_style,
                                                        latex_engine=self.config.latex_engine)
@@ -473,17 +476,18 @@ class LaTeXTranslator(SphinxTranslator):
         return r'{\hyperref[%s]{' % self.idescape(id)
 
     def hyperpageref(self, id: str) -> str:
-        #M+
+        # M+
         if self.builder.config.latex_use_cleveref:
             if self.builder.config.latex_show_pagerefs:
                 if self.builder.config.latex_use_varioref:
                     return r'\Cref{%s}, \vpageref{%s}' % (self.idescape(id), self.idescape(id))
                 else:
-                    return r'\Cref{%s}, page \pageref{%s}' % (self.idescape(id), self.idescape(id))
+                    return r'\Cref{%s}, page \pageref{%s}' % (
+                        self.idescape(id), self.idescape(id))
             else:
                 return r'\Cref{%s}' % (self.idescape(id),)
         else:
-        #M-
+            # M-
             return r'\autopageref*{%s}' % self.idescape(id)
 
     def escape(self, s: str) -> str:
@@ -603,20 +607,20 @@ class LaTeXTranslator(SphinxTranslator):
     def visit_topic(self, node: Element) -> None:
         self.in_minipage = 1
         self.body.append(CR + r'\begin{sphinxShadowBox}' + CR)
-        #M+: Force \\vbox to be a bit smaller
+        # M+: Force \\vbox to be a bit smaller
         if False:
             self.body.append('\\setbox0\\vbox{\\hsize=0.95\\linewidth\n'
                              '\\begin{minipage}{0.9\\linewidth}\n')
-        #M-: Force \\vbox to be a bit smaller
+        # M-: Force \\vbox to be a bit smaller
 
     def depart_topic(self, node: Element) -> None:
         self.in_minipage = 0
-        #M-: Force \\vbox to be a bit smaller
+        # M-: Force \\vbox to be a bit smaller
         if False:
             self.body.append('\\end{minipage}}\n'
                              '\\begin{center}\\setlength{\\fboxsep}{5pt}'
                              '\\shadowbox{\\box0}\\end{center}\n')
-        #M+: Force \\vbox to be a bit smaller
+        # M+: Force \\vbox to be a bit smaller
         self.body.append(r'\end{sphinxShadowBox}' + CR)
 
     visit_sidebar = visit_topic
@@ -1778,9 +1782,9 @@ class LaTeXTranslator(SphinxTranslator):
         raise nodes.SkipNode
 
     def visit_reference(self, node: Element) -> None:
-#M+
+        # M+
         self.visiting_reference = True
-#M-
+        # M-
         if not self.in_title:
             for id in node.get('ids'):
                 anchor = not self.in_caption
@@ -1797,11 +1801,11 @@ class LaTeXTranslator(SphinxTranslator):
             id = self.curfilestack[-1] + ':' + uri[1:]
             self.body.append(self.hyperlink(id))
             self.body.append(r'\sphinxsamedocref{')
-#M+
-#           if (self.config.latex_show_pagerefs or \
+            # M+
+            # if (self.config.latex_show_pagerefs or
             if (self.config.latex_show_pagerefs or self.config.latex_use_cleveref) and not \
                     self.in_production_list:
-#M-
+                # M-
                 self.context.append('}}} (%s)' % self.hyperpageref(id))
             else:
                 self.context.append('}}}')
@@ -1818,22 +1822,23 @@ class LaTeXTranslator(SphinxTranslator):
             if (len(node) and
                     isinstance(node[0], nodes.Element) and
                     'std-term' in node[0].get('classes', [])):
-#M+
-                if self.builder.config.latex_show_pagerefs or self.builder.config.latex_use_cleveref:
+                # M+
+                if self.builder.config.latex_show_pagerefs or \
+                        self.builder.config.latex_use_cleveref:
                     self.context.append('}} (%s)}' % self.hyperpageref(id))
                 else:
-#M-
+                    # M-
                     # don't add a pageref for glossary terms
                     self.context.append('}}}')
                 # mark up as termreference
                 self.body.append(r'\sphinxtermref{')
             else:
                 self.body.append(r'\sphinxcrossref{')
-#               if self.config.latex_show_pagerefs and not self.in_production_list:
-#M+
+                # if self.config.latex_show_pagerefs and not self.in_production_list:
+                # M+
                 if (self.config.latex_show_pagerefs or self.config.latex_use_cleveref) \
-                    and not self.in_production_list:
-#M-
+                        and not self.in_production_list:
+                    # M-
                     self.context.append('}}} (%s)' % self.hyperpageref(id))
                 else:
                     self.context.append('}}}')
@@ -1850,9 +1855,9 @@ class LaTeXTranslator(SphinxTranslator):
 
     def depart_reference(self, node: Element) -> None:
         self.body.append(self.context.pop())
-#M+
+# M+
         self.visiting_reference = None
-#M-
+# M-
         if not self.is_inline(node):
             self.body.append(CR)
 
@@ -2184,7 +2189,7 @@ class LaTeXTranslator(SphinxTranslator):
         classes = node.get('classes', [])  # type: ignore[var-annotated]
         if classes == ['menuselection']:
             self.body.append(r'\sphinxmenuselection{')
-            self.visiting_menuselection = False #True
+            self.visiting_menuselection = False  # True
             self.context.append('}')
         elif classes == ['guilabel']:
             self.body.append(r'\sphinxguilabel{')
@@ -2260,15 +2265,15 @@ class LaTeXTranslator(SphinxTranslator):
             replace(r'\sphinxhyphen{}', '-').\
             replace(r'\textquotesingle{}', "'")
 
-#M+
+# M+
     def escape_uri(self, text: Text) -> Text:
         # URL for humans and printable pages. Allow URL to break gracefully at specific points
         # .replace('/', r'/\-')\
         return self.encode_uri(text)\
             .replace('+', r'+\-')\
             .replace('&', r'&\-')\
-            .replace(r'\textbackslash{}textasciitilde\{\}',r'\textasciitilde{}')\
-            .replace(r'\textbackslash{}sphinxhyphen\{\}',r'\sphinxhyphen{}')\
+            .replace(r'\textbackslash{}textasciitilde\{\}', r'\textasciitilde{}')\
+            .replace(r'\textbackslash{}sphinxhyphen\{\}', r'\sphinxhyphen{}')\
             .replace('\\textbackslash{}\\', '\\')\
             .replace('\\textbackslash{}textendash\\{\\}', '\\textendash{}')\
             .replace(r'\{{[}\}', r'{[}')\
@@ -2276,19 +2281,17 @@ class LaTeXTranslator(SphinxTranslator):
 #            .replace(r'\{{[}\}', r'[')\
 #            .replace(r'\{{]}\}', r']')\
 
-#M-
+# M-
 
     def visit_Text(self, node: Text) -> None:
         text = self.encode(node.astext())
-#M+
-        if self.visiting_reference:
-            text = self.escape_uri(text)
-        elif len(self.tables) == 1:
+# M+
+        if self.visiting_reference or len(self.tables) == 1:
             text = self.escape_uri(text)
         if self.visiting_menuselection:
             text = text\
-                .replace(r'\textbackslash{}','\\')
-#M-
+                .replace(r'\textbackslash{}', '\\')
+            # M-
         self.body.append(text)
 
     def depart_Text(self, node: Text) -> None:

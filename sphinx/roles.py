@@ -289,7 +289,7 @@ class GUILabel(SphinxRole):
 
 
 class MenuSelection(GUILabel):
-    BULLET_CHARACTER = '\N{RIGHTWARDS ARROW}' #M+
+    BULLET_CHARACTER = '\N{RIGHTWARDS ARROW}'  # M+
 
     def run(self) -> tuple[list[Node], list[system_message]]:
         self.text = self.text.replace('-->', self.BULLET_CHARACTER)
