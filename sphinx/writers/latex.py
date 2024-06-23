@@ -707,12 +707,23 @@ class LaTeXTranslator(SphinxTranslator):
         self.in_title = 1
 
     def depart_title(self, node: Element) -> None:
+        # M+
+        add_minitoc = ''
+        if self.in_title \
+                and self.elements['minitoc'] \
+                and self.sectionlevel == 1:
+            add_minitoc = 1
+        # M-
         self.in_title = 0
         if isinstance(node.parent, nodes.table):
             assert self.table is not None
             self.table.caption = self.popbody()
         else:
             self.body.append(self.context.pop())
+        # M+
+        if add_minitoc:
+            self.body.append('\n\\minitoc\n\n')
+            # M-
 
     def visit_subtitle(self, node: Element) -> None:
         if isinstance(node.parent, nodes.sidebar):

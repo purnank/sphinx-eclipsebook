@@ -1272,7 +1272,7 @@ def test_autodoc_type_aliases(app):
         '      docstring',
         '',
         '',
-        '.. py:function:: mult(x: int, y: int) -> int',
+        '.. py:function:: mult(x: myint, y: myint) -> myint',
         '                 mult(x: float, y: float) -> float',
         '   :module: target.autodoc_type_aliases',
         '',
