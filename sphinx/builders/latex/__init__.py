@@ -552,9 +552,9 @@ def setup(app: Sphinx) -> ExtensionMetadata:
     app.add_config_value('latex_docclass', default_latex_docclass, '')
 
 # M+
-    app.add_config_value('latex_use_cleveref', False, None)
-    app.add_config_value('latex_use_varioref', False, None)
-    app.add_config_value('latex_use_minitoc', False, None)
+    app.add_config_value('latex_use_cleveref', False, '')
+    app.add_config_value('latex_use_varioref', False, '')
+    app.add_config_value('latex_use_minitoc', False, '')
 # M-
 
     return {

@@ -708,7 +708,7 @@ class LaTeXTranslator(SphinxTranslator):
 
     def depart_title(self, node: Element) -> None:
         # M+
-        add_minitoc = ''
+        add_minitoc = 0
         if self.in_title \
                 and self.elements['minitoc'] \
                 and self.sectionlevel == 1:
@@ -2277,7 +2277,7 @@ class LaTeXTranslator(SphinxTranslator):
             replace(r'\textquotesingle{}', "'")
 
 # M+
-    def escape_uri(self, text: Text) -> Text:
+    def escape_uri(self, text: Text) -> str:
         # URL for humans and printable pages. Allow URL to break gracefully at specific points
         # .replace('/', r'/\-')\
         return self.encode_uri(text)\
