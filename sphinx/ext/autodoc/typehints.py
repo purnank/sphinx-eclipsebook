@@ -11,16 +11,17 @@ from docutils import nodes
 import sphinx
 from sphinx import addnodes
 from sphinx.util import inspect
-from sphinx.util.typing import stringify_annotation
+from sphinx.util.typing import ExtensionMetadata, stringify_annotation
 
 if TYPE_CHECKING:
     from docutils.nodes import Element
 
     from sphinx.application import Sphinx
+    from sphinx.ext.autodoc import Options
 
 
 def record_typehints(app: Sphinx, objtype: str, name: str, obj: Any,
-                     options: dict, args: str, retann: str) -> None:
+                     options: Options, args: str, retann: str) -> None:
     """Record type hints to env object."""
     if app.config.autodoc_typehints_format == 'short':
         mode = 'smart'
@@ -50,7 +51,7 @@ def merge_typehints(app: Sphinx, domain: str, objtype: str, contentnode: Element
     try:
         signature = cast(addnodes.desc_signature, contentnode.parent[0])
         if signature['module']:
-            fullname = '.'.join([signature['module'], signature['fullname']])
+            fullname = f'{signature["module"]}.{signature["fullname"]}'
         else:
             fullname = signature['fullname']
     except KeyError:
@@ -208,7 +209,7 @@ def augment_descriptions_with_types(
             node += field
 
 
-def setup(app: Sphinx) -> dict[str, Any]:
+def setup(app: Sphinx) -> ExtensionMetadata:
     app.connect('autodoc-process-signature', record_typehints)
     app.connect('object-description-transform', merge_typehints)
 

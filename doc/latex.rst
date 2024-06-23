@@ -377,7 +377,7 @@ Keys that don't need to be overridden unless in special cases are:
    .. versionchanged:: 2.0
       ``'lualatex'`` executes
       ``\defaultfontfeatures[\rmfamily,\sffamily]{}`` to disable TeX
-      ligatures transforming `<<` and `>>` as escaping working with
+      ligatures transforming ``<<`` and ``>>`` as escaping working with
       ``pdflatex/xelatex`` failed with ``lualatex``.
 
    .. versionchanged:: 2.0
@@ -484,7 +484,7 @@ Keys that don't need to be overridden unless in special cases are:
 
    .. versionchanged:: 1.8.3
       Original ``\maketitle`` from document class is not overwritten,
-      hence is re-usable as part of some custom setting for this key.
+      hence is reusable as part of some custom setting for this key.
 
    .. versionadded:: 1.8.3
       ``\sphinxbackoftitlepage`` optional macro.  It can also be defined
