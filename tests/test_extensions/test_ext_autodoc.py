@@ -429,7 +429,7 @@ def _assert_getter_works(app, directive, objtype, name, attrs=(), **kw):
     hooked_members = {s[1] for s in getattr_spy}
     documented_members = {s[1] for s in processed_signatures}
     for attr in attrs:
-        fullname = '.'.join((name, attr))
+        fullname = f'{name}.{attr}'
         assert attr in hooked_members
         assert fullname not in documented_members, f'{fullname!r} not intercepted'
 
@@ -838,7 +838,7 @@ def test_autodoc_special_members(app):
         "special-members": None,
     }
     if sys.version_info >= (3, 13, 0, 'alpha', 5):
-        options["exclude-members"] = "__static_attributes__"
+        options["exclude-members"] = "__static_attributes__,__firstlineno__"
     actual = do_autodoc(app, 'class', 'target.Class', options)
     assert list(filter(lambda l: '::' in l, actual)) == [
         '.. py:class:: Class(arg)',
@@ -1479,7 +1479,7 @@ class _EnumFormatter:
         return self.entry(name, doc, role='attribute', indent=indent, **rst_options)
 
 
-@pytest.fixture()
+@pytest.fixture
 def autodoc_enum_options() -> dict[str, object]:
     """Default autodoc options to use when testing enum's documentation."""
     return {"members": None, "undoc-members": None}
@@ -2321,17 +2321,61 @@ def test_autodoc_TypeVar(app):
 
 @pytest.mark.sphinx('html', testroot='ext-autodoc')
 def test_autodoc_Annotated(app):
-    options = {"members": None}
+    options = {'members': None, 'member-order': 'bysource'}
     actual = do_autodoc(app, 'module', 'target.annotated', options)
     assert list(actual) == [
         '',
         '.. py:module:: target.annotated',
         '',
         '',
-        '.. py:function:: hello(name: str) -> None',
+        '.. py:class:: FuncValidator(func: function)',
+        '   :module: target.annotated',
+        '',
+        '',
+        '.. py:class:: MaxLen(max_length: int, whitelisted_words: list[str])',
+        '   :module: target.annotated',
+        '',
+        '',
+        '.. py:data:: ValidatedString',
+        '   :module: target.annotated',
+        '',
+        '   Type alias for a validated string.',
+        '',
+        '   alias of :py:class:`~typing.Annotated`\\ [:py:class:`str`, '
+        ':py:class:`~target.annotated.FuncValidator`\\ (func=\\ :py:class:`~target.annotated.validate`)]',
+        '',
+        '',
+        ".. py:function:: hello(name: ~typing.Annotated[str, 'attribute']) -> None",
         '   :module: target.annotated',
         '',
         '   docstring',
+        '',
+        '',
+        '.. py:class:: AnnotatedAttributes()',
+        '   :module: target.annotated',
+        '',
+        '   docstring',
+        '',
+        '',
+        '   .. py:attribute:: AnnotatedAttributes.name',
+        '      :module: target.annotated',
+        "      :type: ~typing.Annotated[str, 'attribute']",
+        '',
+        '      Docstring about the ``name`` attribute.',
+        '',
+        '',
+        '   .. py:attribute:: AnnotatedAttributes.max_len',
+        '      :module: target.annotated',
+        "      :type: list[~typing.Annotated[str, ~target.annotated.MaxLen(max_length=10, whitelisted_words=['word_one', 'word_two'])]]",
+        '',
+        '      Docstring about the ``max_len`` attribute.',
+        '',
+        '',
+        '   .. py:attribute:: AnnotatedAttributes.validated',
+        '      :module: target.annotated',
+        '      :type: ~typing.Annotated[str, ~target.annotated.FuncValidator(func=~target.annotated.validate)]',
+        '',
+        '      Docstring about the ``validated`` attribute.',
         '',
     ]
 
