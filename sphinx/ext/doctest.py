@@ -27,7 +27,7 @@ from sphinx.util.docutils import SphinxDirective
 from sphinx.util.osutil import relpath
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable, Sequence
+    from collections.abc import Callable, Set
 
     from docutils.nodes import Element, Node, TextElement
 
@@ -322,7 +322,7 @@ class DocTestBuilder(Builder):
         self.outfile.write(text)
 
     def _warn_out(self, text: str) -> None:
-        if self.app.quiet or self.app.warningiserror:
+        if self.app.quiet:
             logger.warning(text)
         else:
             logger.info(text, nonl=True)
@@ -355,13 +355,9 @@ Doctest summary
         if self.total_failures or self.setup_failures or self.cleanup_failures:
             self.app.statuscode = 1
 
-    def write(self, build_docnames: Iterable[str] | None, updated_docnames: Sequence[str],
-              method: str = 'update') -> None:
-        if build_docnames is None:
-            build_docnames = sorted(self.env.all_docs)
-
+    def write_documents(self, docnames: Set[str]) -> None:
         logger.info(bold('running tests...'))
-        for docname in build_docnames:
+        for docname in sorted(docnames):
             # no need to resolve the doctree
             doctree = self.env.get_doctree(docname)
             self.test_doc(docname, doctree)
