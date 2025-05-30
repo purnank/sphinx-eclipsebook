@@ -86,9 +86,19 @@
 \release{<%= release | e %>}
 \author{<%= author %>}
 <%- if logofilename %>
-\newcommand{\sphinxlogo}{\sphinxincludegraphics{<%= logofilename %>}\par}
+\newcommand{\sphinxlogo}{
+  \begin{center}
+  \includegraphics[width=\textwidth, height=0.96\textheight, keepaspectratio]{<%= logofilename %>}
+  \end{center}
+  \par
+  \cleardoublepage
+  \noindent\rule{\textwidth}{4pt}\par
+}
 <%- else %>
-\newcommand{\sphinxlogo}{\vbox{}}
+\newcommand{\sphinxlogo}{
+  \vbox{}
+  \noindent\rule{\textwidth}{4pt}\par
+}
 <%- endif %>
 <%- if releasename or release %>
 \renewcommand{\releasename}{<%= releasename or _('Release') | e %>}
