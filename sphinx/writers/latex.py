@@ -477,6 +477,7 @@ class LaTeXTranslator(SphinxTranslator):
                 'sphinx(which loads titlesec)\n\\AtBeginDocument{\\dominitoc}'
         else:
             self.elements['minitoc'] = ''
+        self.elements['subtitle'] = builder.config.latex_subtitle
 # M-
 
         self.highlighter = highlighting.PygmentsBridge(

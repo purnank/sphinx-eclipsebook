@@ -649,6 +649,7 @@ def setup(app: Sphinx) -> ExtensionMetadata:
     app.add_config_value('latex_use_cleveref', False, '')
     app.add_config_value('latex_use_varioref', False, '')
     app.add_config_value('latex_use_minitoc', False, '')
+    app.add_config_value('latex_subtitle', '', '')
 # M-
 
     return {

@@ -81,7 +81,13 @@
 <%= secnumdepth %>
 <%= preamble %>
 
-\title{<%= title %>}
+\title{<%= title %>\\
+    \vspace{0.5em}\\
+    \large\bfseries{\\
+      <%= subtitle %>
+    \vspace{1em}\\
+    }
+}
 \date{<%= date %>}
 \release{<%= release | e %>}
 \author{<%= author %>}
