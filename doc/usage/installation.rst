@@ -56,7 +56,7 @@ Run the following command::
    Or, if writing documentation for a Python package,
    place the dependencies in the `pyproject.toml file`__::
 
-      $ pip install .[docs]
+      $ pip install . --group docs
 
    __ https://pip.pypa.io/en/stable/reference/requirements-file-format/
    __ https://packaging.python.org/en/latest/guides/writing-pyproject-toml/#dependencies-optional-dependencies
@@ -152,23 +152,23 @@ Install either ``python3x-sphinx`` using :command:`port`:
 
 ::
 
-   $ sudo port install py313-sphinx
+   $ sudo port install py314-sphinx
 
 To set up the executable paths, use the ``port select`` command:
 
 ::
 
-   $ sudo port select --set python python313
-   $ sudo port select --set sphinx py313-sphinx
+   $ sudo port select --set python python314
+   $ sudo port select --set sphinx py314-sphinx
 
 For more information, refer to the `package overview`__.
 
-__ https://www.macports.org/ports.php?by=library&substr=py313-sphinx
+__ https://www.macports.org/ports.php?by=library&substr=py314-sphinx
 
 Windows
 ~~~~~~~
 
-Sphinx can be install using `Chocolatey`__.
+Sphinx can be installed using `Chocolatey`__.
 
 __ https://chocolatey.org/
 

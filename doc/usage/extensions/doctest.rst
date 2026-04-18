@@ -116,10 +116,10 @@ a comma-separated list of group names.
 
       Specify the required Python version for the example to be tested. For instance,
       in the following case the example will be tested only for Python versions greater
-      than 3.12::
+      than 3.14::
 
          .. doctest::
-            :pyversion: > 3.12
+            :pyversion: > 3.14
 
       The following operands are supported:
 
@@ -452,3 +452,11 @@ The doctest extension uses the following configuration values:
    Also, removal of ``<BLANKLINE>`` and ``# doctest:`` options only works in
    :rst:dir:`doctest` blocks, though you may set :confval:`trim_doctest_flags`
    to achieve that in all code blocks with Python console content.
+
+.. confval:: doctest_fail_fast
+   :type: :code-py:`bool`
+   :default: :code-py:`False`
+
+   Exit when the first failure is encountered.
+
+   .. versionadded:: 9.0

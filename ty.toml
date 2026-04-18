@@ -1,0 +1,26 @@
+# Configuration file for Ty_.
+# n.b. Ty is early in development.
+#      Sphinx's current primary/reference type-checker is mypy.
+#
+# .. _Ty: https://docs.astral.sh/ty/
+
+[src]
+include = [
+    "doc/conf.py",
+    "doc/development/tutorials/examples/autodoc_intenum.py",
+    "doc/development/tutorials/examples/helloworld.py",
+    "sphinx",
+    "tests",
+    "utils",
+]
+exclude = [
+    "tests/roots",
+    "tests/test_util/typing_test_data.py",
+]
+
+[rules]
+invalid-argument-type = "ignore"
+invalid-assignment = "ignore"
+invalid-method-override = "ignore"
+non-subscriptable = "ignore"
+possibly-missing-attribute = "ignore"

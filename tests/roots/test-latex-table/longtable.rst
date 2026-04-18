@@ -15,8 +15,8 @@ longtable
    cell3-1 cell3-2
    ======= =======
 
-longtable having :widths: option
---------------------------------
+longtable having widths option
+------------------------------
 
 .. _mylongtable:
 
@@ -35,8 +35,8 @@ longtable having :widths: option
 
 See mylongtable_, same as :ref:`this one <namedlongtable>`.
 
-longtable having :align: option
--------------------------------
+longtable having align option
+-----------------------------
 
 .. table::
    :align: right
@@ -50,8 +50,8 @@ longtable having :align: option
    cell3-1 cell3-2
    ======= =======
 
-longtable with tabularcolumn
-----------------------------
+longtable with tabularcolumns
+-----------------------------
 
 .. tabularcolumns:: |c|c|
 
@@ -101,8 +101,25 @@ longtable having verbatim
    * - cell3-1
      - cell3-2
 
-longtable having both :widths: and problematic cell
----------------------------------------------------
+longtable having formerly problematic
+-------------------------------------
+
+.. list-table::
+   :class: longtable
+   :header-rows: 1
+
+   * - header1
+     - header2
+   * - + item1
+       + item2
+     - cell1-2
+   * - cell2-1
+     - cell2-2
+   * - cell3-1
+     - cell3-2
+
+longtable having widths and formerly problematic
+------------------------------------------------
 
 .. list-table::
    :class: longtable
@@ -119,25 +136,8 @@ longtable having both :widths: and problematic cell
    * - cell3-1
      - cell3-2
 
-longtable having problematic cell
----------------------------------
-
-.. list-table::
-   :class: longtable
-   :header-rows: 1
-
-   * - header1
-     - header2
-   * - + item1
-       + item2
-     - cell1-2
-   * - cell2-1
-     - cell2-2
-   * - cell3-1
-     - cell3-2
-
-longtable having both stub columns and problematic cell
--------------------------------------------------------
+longtable having stub columns and formerly problematic
+------------------------------------------------------
 
 .. list-table::
    :class: longtable
@@ -154,3 +154,74 @@ longtable having both stub columns and problematic cell
    * - cell2-1
      - cell2-2
      - cell2-3
+
+longtable with multirow cell near page footer
+---------------------------------------------
+
+.. |lorem| replace::
+
+   Lorem ipsum dolor sit amet consectetur adipiscing elit. Quisque faucibus ex
+   sapien vitae pellentesque sem placerat. In id cursus mi pretium tellus duis
+   convallis. Tempus leo eu aenean sed diam urna tempor. Pulvinar vivamus
+   fringilla lacus nec metus bibendum egestas. Iaculis massa nisl malesuada
+   lacinia integer nunc posuere. Ut hendrerit semper vel class aptent taciti
+   sociosqu. Ad litora torquent per conubia nostra inceptos himenaeos.
+
+table having ...
+
+* consecutive multirow near footer
+
+.. raw:: latex
+
+   \newpage
+   \vspace*{\dimeval{\textheight - 5\baselineskip}}
+
+.. rst-class:: longtable
+
++-----------+-----------+
+| |lorem|   | Cell 1    |
+|           +-----------+
+|           | Cell 2    |
+|           +-----------+
+|           | Cell 3    |
+|           +-----------+
+|           | Cell 4    |
+|           +-----------+
+|           | Cell 5    |
+|           +-----------+
+|           | Cell 6    |
+|           +-----------+
+|           | Cell 7    |
+|           +-----------+
+|           | Cell 8    |
+|           +-----------+
+|           | Cell 9    |
+|           +-----------+
+|           | Cell 10   |
+|           +-----------+
+|           | Cell 11   |
+|           +-----------+
+|           | Cell 12   |
+|           +-----------+
+|           | Cell 13   |
+|           +-----------+
+|           | Cell 14   |
+|           +-----------+
+|           | Cell 15   |
+|           +-----------+
+|           | Cell 16   |
++-----------+-----------+
+| |lorem|   |           |
++-----------+-----------+
+| |lorem|   |           |
++-----------+-----------+
+| |lorem|   |           |
++-----------+-----------+
+| |lorem|   |           |
++-----------+-----------+
+| |lorem|   |           |
++-----------+-----------+
+| |lorem|   |           |
++-----------+-----------+
+| |lorem|   |           |
++-----------+-----------+

@@ -107,7 +107,7 @@ The :mod:`sphinx.ext.autosummary` extension does this in two parts:
       How to display signatures. Valid values are
 
       - ``long`` (*default*): use a long signature. This is still cut off so that name
-        plus signature do not exceeed a certain length.
+        plus signature do not exceed a certain length.
       - ``short``: Function and class signatures are displayed as ``(…)`` if they have
         arguments and as ``()`` if they don't have arguments.
       - ``none``: do not show signatures.
@@ -412,3 +412,27 @@ the title of a page.
    Stub pages are generated also based on these directives.
 
 .. _`escape filter`: https://jinja.palletsprojects.com/en/3.0.x/templates/#jinja-filters.escape
+
+Autolink role
+-------------
+
+.. rst:role:: autolink
+
+   The ``:autolink:`` role functions as ``:py:obj:`` when the referenced *name*
+   can be resolved to a Python object, and otherwise it becomes simple emphasis.
+
+   There are some known design flaws.
+   For example, in the case of multiple objects having the same name,
+   :rst:role:`!autolink` could resolve to the wrong object.
+   It will fail silently if the referenced object is not found,
+   for example due to a spelling mistake or renaming.
+   This is sometimes unwanted behaviour.
+
+   Some users choose to configure their :confval:`default_role` to ``autolink``
+   for 'smart' referencing using the default interpreted text role (```content```).
+
+   .. seealso::
+
+      :rst:role:`any`
+
+      :rst:role:`py:obj`
